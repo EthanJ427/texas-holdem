@@ -245,6 +245,12 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
   position: relative;
   flex: 0 0 auto;
+}
+
+/* 只有刚发出来（或刚翻开）的牌才播入场动画。
+   每次渲染都是整块重建 DOM，如果动画挂在 .card 上，
+   任何一个动作都会让全桌的牌一起重新淡入，看起来就是满屏闪。 */
+.card.dealing {
   animation: card-in .28s ease-out backwards;
 }
 
@@ -378,6 +384,10 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: 12px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+}
+
+/* 同理：只有金额真的变了才弹一下 */
+.seat-bet.changed {
   animation: bet-in .2s ease-out;
 }
 
@@ -390,7 +400,6 @@ button { font-family: inherit; cursor: pointer; }
 .seat-bet.inline {
   position: static;
   transform: none;
-  animation: none;
 }
 
 .chip-dot {

@@ -145,16 +145,32 @@
 
   // ---------- 渲染 ----------
 
+  /**
+   * 记录已经出现过的牌和下注额。渲染是整块重建 DOM 的，
+   * 没有这层记录的话每次重建都会重播一遍入场动画，满屏乱闪。
+   * 每手牌开始时清空。
+   */
+  let shownKeys = new Set();
+
+  /** 这个 key 是第一次出现吗？顺手记下来。 */
+  function isFresh(key) {
+    if (shownKeys.has(key)) return false;
+    shownKeys.add(key);
+    return true;
+  }
+
   function cardEl(cardId, options) {
     const opts = options || {};
     const el = document.createElement('div');
     if (cardId === null || cardId === undefined) {
       el.className = 'card back';
+      if (opts.animate) el.classList.add('dealing');
       return el;
     }
     const suit = Cards.suitOf(cardId);
     const red = suit === 1 || suit === 2;
     el.className = 'card ' + (red ? 'red' : 'black');
+    if (opts.animate) el.classList.add('dealing');
     if (opts.dimmed) el.classList.add('dimmed');
     if (opts.winning) el.classList.add('winning');
     el.innerHTML =
@@ -174,11 +190,22 @@
     $('street-label').textContent = streetNames[engine.street] || '';
 
     // 公共牌
+    // 公共牌复用已有节点：翻牌是一张一张发的，中间还夹着别的重渲染，
+    // 每次都重建的话动画会被掐断，牌等于没动过就出现了。
     const board = $('board');
-    board.innerHTML = '';
-    for (const c of displayBoard) {
-      board.appendChild(cardEl(c, { winning: highlightCards.has(c) }));
-    }
+    while (board.children.length > displayBoard.length) board.lastChild.remove();
+    displayBoard.forEach((c, i) => {
+      const key = `board:${i}:${c}`;
+      const existing = board.children[i];
+      if (existing && existing.dataset.key === key) {
+        existing.classList.toggle('winning', highlightCards.has(c));
+        return;
+      }
+      const el = cardEl(c, { winning: highlightCards.has(c), animate: isFresh(key) });
+      el.dataset.key = key;
+      if (existing) board.replaceChild(el, existing);
+      else board.appendChild(el);
+    });
 
     // 座位
     const seats = $('seats');
@@ -233,11 +260,13 @@
     cards.className = 'seat-cards';
     if (!p.busted && p.hole.length === 2) {
       const faceUp = p.isHuman || (revealAll && !p.folded);
-      for (const c of p.hole) {
+      p.hole.forEach((c, idx) => {
+        // key 里带上正反面，摊牌翻开时 key 会变，正好让翻牌动一下
+        const fresh = isFresh(`hole:${i}:${idx}:${faceUp ? c : 'back'}`);
         cards.appendChild(faceUp
-          ? cardEl(c, { winning: highlightCards.has(c), dimmed: p.folded })
-          : cardEl(null));
-      }
+          ? cardEl(c, { winning: highlightCards.has(c), dimmed: p.folded, animate: fresh })
+          : cardEl(null, { animate: fresh }));
+      });
     }
     seat.appendChild(cards);
 
@@ -255,6 +284,7 @@
     if (p.bet > 0 && isNarrow()) {
       const bet = document.createElement('div');
       bet.className = 'seat-bet inline';
+      if (isFresh(`bet:${i}:${p.bet}`)) bet.classList.add('changed');
       bet.innerHTML = `<span class="chip-dot"></span>${p.bet}`;
       seat.appendChild(bet);
     }
@@ -277,6 +307,7 @@
     const pos = BET_OFFSETS[i];
     const el = document.createElement('div');
     el.className = 'seat-bet';
+    if (isFresh(`bet:${i}:${p.bet}`)) el.classList.add('changed');
     el.style.left = pos.left + '%';
     el.style.top = pos.top + '%';
     el.style.transform = 'translate(-50%, -50%)';
@@ -426,6 +457,7 @@
 
   async function playHand(gen) {
     displayBoard = [];
+    shownKeys = new Set();
     revealAll = false;
     highlightCards = new Set();
     winnerIds = new Set();
