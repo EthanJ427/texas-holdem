@@ -24,40 +24,32 @@
     { left: 88, top: 74 },
   ];
 
-  // 竖屏时桌子变窄，两侧的座位要往里收，否则会挂到桌沿外面
+  // 竖屏时桌子变窄，两侧的座位要往里收，否则会挂到桌沿外面。
+  // 上面两个座位还要再抬高一点：挂上下注额后座位会变高，
+  // 不留余量的话底部会探进公共牌那一行。
   const SEAT_POSITIONS_NARROW = [
     { left: 50, top: 94 },
-    { left: 21, top: 77 },
-    { left: 21, top: 25 },
+    { left: 21, top: 78 },
+    { left: 21, top: 21 },
     { left: 50, top: 6 },
-    { left: 79, top: 25 },
-    { left: 79, top: 77 },
+    { left: 79, top: 21 },
+    { left: 79, top: 78 },
   ];
 
-  // 下注筹码显示在座位朝向桌心的一侧
+  // 下注筹码显示在座位朝向桌心的一侧。
+  // 正上方那个要再抬高些，否则会压到底池的数字。
   const BET_OFFSETS = [
     { left: 50, top: 62 },
     { left: 28, top: 56 },
     { left: 28, top: 40 },
-    { left: 50, top: 34 },
+    { left: 50, top: 29 },
     { left: 72, top: 40 },
     { left: 72, top: 56 },
-  ];
-
-  // 竖屏时桌心的底池和公共牌占了更大一块，筹码要绕开它
-  const BET_OFFSETS_NARROW = [
-    { left: 50, top: 79 },
-    { left: 26, top: 59 },
-    { left: 26, top: 41 },
-    { left: 50, top: 21 },
-    { left: 74, top: 41 },
-    { left: 74, top: 59 },
   ];
 
   const NARROW_BREAKPOINT = 780;
   const isNarrow = () => window.innerWidth <= NARROW_BREAKPOINT;
   const seatPositions = () => (isNarrow() ? SEAT_POSITIONS_NARROW : SEAT_POSITIONS);
-  const betOffsets = () => (isNarrow() ? BET_OFFSETS_NARROW : BET_OFFSETS);
 
   const AI_NAMES = ['老陈', '阿杰', '王姐', '小林', '高博'];
 
@@ -87,10 +79,17 @@
 
   function save() {
     if (!engine) return;
+    // 中途退出时这一手作废，已经推进底池的筹码要退回来，否则存档一读就少了一截。
+    // 一手打完后 committed 仍保留着本手的投入，但赢的钱已经进了 chips，这时不能再加。
+    const handInProgress = !engine.handOver;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         players: engine.players.map((p) => ({
-          name: p.name, level: p.level, chips: p.chips, isHuman: p.isHuman, busted: p.busted,
+          name: p.name,
+          level: p.level,
+          chips: p.chips + (handInProgress ? p.committed : 0),
+          isHuman: p.isHuman,
+          busted: p.busted,
         })),
         smallBlind: engine.smallBlind,
         bigBlind: engine.bigBlind,
@@ -186,7 +185,9 @@
     seats.innerHTML = '';
     engine.players.forEach((p, i) => {
       seats.appendChild(seatEl(p, i));
-      if (p.bet > 0) seats.appendChild(betEl(p, i));
+      // 宽屏时筹码摆在座位和桌心之间；竖屏桌子太窄，摆哪儿都会压到
+      // 公共牌或别人的牌，所以直接挂在座位上（见 seatEl）
+      if (p.bet > 0 && !isNarrow()) seats.appendChild(betEl(p, i));
     });
 
     // 庄家按钮贴在庄家座位旁边
@@ -250,6 +251,14 @@
       `<div class="plate-chips${p.busted ? ' busted' : ''}">${p.busted ? '出局' : p.chips}</div>`;
     seat.appendChild(plate);
 
+    // 竖屏时下注额跟着座位走，避免和公共牌抢地方
+    if (p.bet > 0 && isNarrow()) {
+      const bet = document.createElement('div');
+      bet.className = 'seat-bet inline';
+      bet.innerHTML = `<span class="chip-dot"></span>${p.bet}`;
+      seat.appendChild(bet);
+    }
+
     // 摊牌时显示牌型
     if (revealAll && engine.result && engine.result.showdown) {
       const info = engine.result.hands.find((h) => h.player === i);
@@ -265,7 +274,7 @@
   }
 
   function betEl(p, i) {
-    const pos = betOffsets()[i];
+    const pos = BET_OFFSETS[i];
     const el = document.createElement('div');
     el.className = 'seat-bet';
     el.style.left = pos.left + '%';

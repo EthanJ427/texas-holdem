@@ -386,6 +386,13 @@ button { font-family: inherit; cursor: pointer; }
   to   { opacity: 1; transform: scale(1); }
 }
 
+/* 竖屏时下注额挂在座位下方，不再单独定位到桌面上 */
+.seat-bet.inline {
+  position: static;
+  transform: none;
+  animation: none;
+}
+
 .chip-dot {
   width: 8px; height: 8px;
   border-radius: 50%;

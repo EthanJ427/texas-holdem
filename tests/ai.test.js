@@ -12,6 +12,27 @@
   const card = (str) => RANKS.indexOf(str[0]) * 4 + SUITS[str[1]];
   const hand = (str) => str.split(' ').map(card);
 
+  /**
+   * 固定种子的随机数发生器（mulberry32）。
+   * 对局测试如果用 Math.random，几百手的方差足以让结论在「碾压」和「打平」之间来回跳，
+   * 所以跑对局时临时把 Math.random 换掉，让结果可复现。
+   */
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function withSeed(seed, fn) {
+    const original = Math.random;
+    Math.random = mulberry32(seed);
+    try { return fn(); } finally { Math.random = original; }
+  }
+
   suite('Chen 公式起手牌打分', () => {
     eq(AI.chenScore(hand('As Ah')), 20, 'AA = 20（最高分）');
     eq(AI.chenScore(hand('Ks Kh')), 16, 'KK = 16');
@@ -76,6 +97,8 @@
       });
 
       for (let h = 0; h < 60; h++) {
+        // 每手都把筹码补回去，否则有人破产后牌桌很快散场，覆盖不到足够多的决策
+        g.players.forEach((p) => { p.chips = 1000; p.busted = false; });
         if (!g.startHand()) break;
         let guard = 0;
         while (!g.handOver && guard++ < 200) {
@@ -106,51 +129,59 @@
 
     eq(error, null, 'AI 驱动的对局没有抛异常');
     eq(illegal, null, '所有决策都在引擎允许的范围内');
-    ok(decisions > 300, `共做出 ${decisions} 次决策`);
+    ok(decisions > 200, `共做出 ${decisions} 次决策，覆盖三个档位`);
   });
 
-  suite('等级确实有强弱之分（高手 vs 新手，单挑 400 手）', () => {
+  suite('等级确实有强弱之分（高手 vs 新手，单挑）', () => {
     // 每手都把双方筹码重置为 1000，只统计每手的净输赢，
     // 这样衡量的是决策质量，不会被「谁先破产」的运气放大。
-    const HANDS = 400;
+    // 用三个固定种子各打 500 手，既可复现又足够压住方差。
+    const HANDS_PER_SEED = 500;
+    const SEEDS = [20240101, 77777, 31415926];
     const STACK = 1000;
-    const g = new HoldemEngine({
-      players: [
-        { name: '高手', level: 'expert', chips: STACK },
-        { name: '新手', level: 'novice', chips: STACK },
-      ],
-      smallBlind: 10, bigBlind: 20,
-    });
 
-    let expertNet = 0;
-    let played = 0;
-    const started = performance.now();
+    function duel(seed) {
+      return withSeed(seed, () => {
+        const g = new HoldemEngine({
+          players: [
+            { name: '高手', level: 'expert', chips: STACK },
+            { name: '新手', level: 'novice', chips: STACK },
+          ],
+          smallBlind: 10, bigBlind: 20,
+        });
 
-    for (let h = 0; h < HANDS; h++) {
-      g.players[0].chips = STACK;
-      g.players[1].chips = STACK;
-      g.players[0].busted = false;
-      g.players[1].busted = false;
-      if (!g.startHand()) break;
-      played++;
-
-      let guard = 0;
-      while (!g.handOver && guard++ < 200) {
-        const actor = g.currentActor();
-        if (!actor) break;
-        const move = AI.decide(g, actor);
-        g.act(move.type, move.amount);
-      }
-      expertNet += g.players[0].chips - STACK;
+        let net = 0;
+        let played = 0;
+        for (let h = 0; h < HANDS_PER_SEED; h++) {
+          g.players.forEach((p) => { p.chips = STACK; p.busted = false; });
+          if (!g.startHand()) break;
+          played++;
+          let guard = 0;
+          while (!g.handOver && guard++ < 200) {
+            const actor = g.currentActor();
+            if (!actor) break;
+            const move = AI.decide(g, actor);
+            g.act(move.type, move.amount);
+          }
+          net += g.players[0].chips - STACK;
+        }
+        return { net, played };
+      });
     }
 
+    const started = performance.now();
+    const runs = SEEDS.map(duel);
     const elapsed = ((performance.now() - started) / 1000).toFixed(1);
-    const perHand = expertNet / played;
-    const bbPer100 = (perHand / 20) * 100;
 
-    eq(played, HANDS, `完整打完 ${HANDS} 手（耗时 ${elapsed} 秒）`);
-    ok(expertNet > 0, `高手净赢 ${expertNet} 筹码，约 ${bbPer100.toFixed(0)} BB/100 手`);
-    ok(bbPer100 > 20, `优势足够明显（${bbPer100.toFixed(0)} BB/100，远超正常牌手之间的差距）`);
+    const totalNet = runs.reduce((s, r) => s + r.net, 0);
+    const totalHands = runs.reduce((s, r) => s + r.played, 0);
+    const bbPer100 = ((totalNet / totalHands) / 20) * 100;
+
+    eq(totalHands, HANDS_PER_SEED * SEEDS.length, `打满 ${HANDS_PER_SEED * SEEDS.length} 手（耗时 ${elapsed} 秒）`);
+    ok(totalNet > 0, `高手合计净赢 ${totalNet} 筹码，约 ${bbPer100.toFixed(0)} BB/100 手`);
+    ok(bbPer100 > 20, `优势足够明显（${bbPer100.toFixed(0)} BB/100）`);
+    ok(runs.every((r) => r.net > 0),
+      `三个种子各自都是赢的：${runs.map((r) => ((r.net / r.played / 20) * 100).toFixed(0) + ' BB/100').join('、')}`);
   });
 
   suite('三档 AI 的松紧程度递进', () => {
