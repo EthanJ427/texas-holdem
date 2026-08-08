@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>德州扑克 · 测试</title>
+  <style>
+    body { font: 14px/1.7 ui-monospace, Menlo, Consolas, monospace; padding: 24px; max-width: 900px; margin: 0 auto; }
+    h2 { font-size: 15px; margin: 22px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #ddd; }
+    .pass { color: #2e7d32; }
+    .fail { color: #c62828; font-weight: 700; }
+    .summary { font-size: 18px; font-weight: 700; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; }
+    .summary.ok { background: #e8f5e9; color: #2e7d32; }
+    .summary.bad { background: #ffebee; color: #c62828; }
+  </style>
+</head>
+<body>
+  <p>测试运行中…</p>
+
+  <script src="../js/cards.js"></script>
+  <script src="../js/engine.js"></script>
+  <script src="../js/ai.js"></script>
+
+  <script src="harness.js"></script>
+  <script src="cards.test.js"></script>
+  <script src="engine.test.js"></script>
+  <script src="ai.test.js"></script>
+  <script>window.T.run();</script>
+</body>
+</html>

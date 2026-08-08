@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>德州扑克</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 开局设置 -->
+  <div id="setup" class="screen">
+    <div class="setup-card">
+      <h1>德州扑克</h1>
+      <p class="tagline">六人桌 · 无限注 · 你 vs 五个电脑对手</p>
+
+      <label class="field">
+        <span class="field-label">对手强度</span>
+        <select id="difficulty">
+          <option value="mixed">混合桌 —— 各种水平都有（推荐）</option>
+          <option value="novice">全是新手 —— 轻松热身</option>
+          <option value="intermediate">全是进阶 —— 有来有回</option>
+          <option value="expert">全是高手 —— 硬仗</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field-label">初始筹码</span>
+        <select id="stack">
+          <option value="1000">1000（50 个大盲）</option>
+          <option value="2000">2000（100 个大盲）</option>
+          <option value="5000">5000（250 个大盲，可以慢慢打）</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field-label">盲注</span>
+        <select id="blinds">
+          <option value="10">10 / 20</option>
+          <option value="25">25 / 50</option>
+          <option value="50">50 / 100</option>
+        </select>
+      </label>
+
+      <button id="start-btn" class="primary-btn">坐下开打</button>
+
+      <div class="setup-note">
+        电脑对手只看得见自己的底牌和公共牌，和你掌握的信息完全一样，不会偷看。
+        <a href="tests/" target="_blank">查看测试</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 牌桌 -->
+  <div id="game" class="screen hidden">
+    <header class="topbar">
+      <div class="topbar-left">
+        <span class="hand-counter">第 <b id="hand-number">0</b> 手</span>
+        <span class="blind-info" id="blind-info"></span>
+      </div>
+      <div class="topbar-right">
+        <button id="log-toggle" class="ghost-btn" title="牌局记录">记录</button>
+        <button id="quit-btn" class="ghost-btn">退出</button>
+      </div>
+    </header>
+
+    <div class="table-wrap">
+      <div class="felt">
+        <div class="table-center">
+          <div class="pot-display">
+            <span class="pot-label">底池</span>
+            <span class="pot-amount" id="pot-amount">0</span>
+          </div>
+          <div class="board" id="board"></div>
+          <div class="street-label" id="street-label"></div>
+        </div>
+        <div id="seats"></div>
+      </div>
+    </div>
+
+    <div class="actionbar" id="actionbar">
+      <div class="action-info">
+        <span id="action-prompt">等待发牌…</span>
+      </div>
+      <div class="action-buttons" id="action-buttons"></div>
+      <div class="raise-panel hidden" id="raise-panel">
+        <div class="raise-presets" id="raise-presets"></div>
+        <div class="raise-row">
+          <input type="range" id="raise-slider" min="0" max="100" value="0">
+          <output class="raise-amount" id="raise-amount">0</output>
+        </div>
+        <div class="raise-confirm">
+          <button class="ghost-btn" id="raise-cancel">返回</button>
+          <button class="primary-btn" id="raise-confirm">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <aside class="log-panel hidden" id="log-panel">
+      <div class="log-header">
+        <span>牌局记录</span>
+        <button class="ghost-btn" id="log-close">关闭</button>
+      </div>
+      <div class="log-body" id="log-body"></div>
+    </aside>
+  </div>
+
+  <!-- 每手结束后的结算条 -->
+  <div class="result-banner hidden" id="result-banner">
+    <div class="result-text" id="result-text"></div>
+    <button class="primary-btn" id="next-hand-btn">下一手</button>
+  </div>
+
+  <!-- 牌局结束 -->
+  <div class="screen hidden" id="gameover">
+    <div class="setup-card">
+      <h1 id="gameover-title">牌局结束</h1>
+      <p class="tagline" id="gameover-text"></p>
+      <button id="restart-btn" class="primary-btn">再来一局</button>
+    </div>
+  </div>
+
+  <script src="js/cards.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
