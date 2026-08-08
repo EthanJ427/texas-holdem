@@ -260,6 +260,8 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .card .rank { font-size: calc(var(--card-w) * .46); }
+/* 「10」是两个字符，收一点字距和字号才不会顶到牌边 */
+.card .rank.wide { font-size: calc(var(--card-w) * .38); letter-spacing: -1px; }
 .card .suit { font-size: calc(var(--card-w) * .40); margin-top: 2px; }
 
 .card.red { color: #c0392b; }

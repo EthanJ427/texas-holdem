@@ -173,8 +173,9 @@
     if (opts.animate) el.classList.add('dealing');
     if (opts.dimmed) el.classList.add('dimmed');
     if (opts.winning) el.classList.add('winning');
+    const label = Cards.RANK_LABELS[Cards.rankOf(cardId)];
     el.innerHTML =
-      `<span class="rank">${Cards.RANK_CHARS[Cards.rankOf(cardId)]}</span>` +
+      `<span class="rank${label.length > 1 ? ' wide' : ''}">${label}</span>` +
       `<span class="suit">${Cards.SUIT_CHARS[suit]}</span>`;
     return el;
   }

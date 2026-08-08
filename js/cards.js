@@ -11,7 +11,13 @@
 (function (root) {
   'use strict';
 
+  // 单字符记号，牌局圈内惯用，T 就是 10。只在代码内部和测试里用。
   const RANK_CHARS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
+
+  // 给人看的写法：真实扑克牌上印的是 10，不是 T。
+  // 凡是会出现在屏幕上的地方一律用这一套。
+  const RANK_LABELS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+
   const SUIT_CHARS = ['♠', '♥', '♦', '♣'];
 
   const CATEGORY = {
@@ -32,7 +38,7 @@
 
   const rankOf = (card) => card >> 2;
   const suitOf = (card) => card & 3;
-  const cardName = (card) => RANK_CHARS[rankOf(card)] + SUIT_CHARS[suitOf(card)];
+  const cardName = (card) => RANK_LABELS[rankOf(card)] + SUIT_CHARS[suitOf(card)];
 
   function makeDeck() {
     const deck = new Array(52);
@@ -159,7 +165,7 @@
     const cat = categoryOf(scoreValue);
     const k = [];
     for (let i = 0; i < 5; i++) k.push((scoreValue >> (16 - i * 4)) & 0xf);
-    const R = (idx) => RANK_CHARS[idx];
+    const R = (idx) => RANK_LABELS[idx];
 
     switch (cat) {
       case CATEGORY.STRAIGHT_FLUSH:
@@ -200,7 +206,7 @@
   }
 
   const api = {
-    RANK_CHARS, SUIT_CHARS, CATEGORY, CATEGORY_NAMES,
+    RANK_CHARS, RANK_LABELS, SUIT_CHARS, CATEGORY, CATEGORY_NAMES,
     rankOf, suitOf, cardName,
     makeDeck, shuffle,
     evaluate, evaluate5, categoryOf, describe, bestFive,

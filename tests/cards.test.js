@@ -25,13 +25,27 @@
       ['5h 4d 3s 2c Ah', '顺子', '5 高顺子'],       // 轮子：A 当 1 用
       ['Qh Qd Qs 7c 2h', '三条', '三条 Q'],
       ['Kh Kd 4s 4c 9h', '两对', '两对 K/4'],
-      ['Th Td 8s 5c 2h', '一对', '一对 T'],
+      ['Th Td 8s 5c 2h', '一对', '一对 10'],
       ['Ah Qd 9s 5c 2h', '高牌', '高牌 A'],
     ];
     for (const [h, cat, d] of cases) {
       eq(name(h), cat, `${h} → ${cat}`);
       eq(desc(h), d, `${h} 描述为「${d}」`);
     }
+  });
+
+  suite('给人看的牌面写法', () => {
+    // T 是扑克圈的单字符记号，但真实扑克牌上印的是 10。
+    // 凡是会出现在屏幕上的地方都必须显示 10。
+    eq(C.cardName(card('Td')), '10♦', '牌面显示 10 而不是 T');
+    eq(desc('Th Td 8s 5c 2h'), '一对 10', '牌型描述里也是 10');
+    eq(desc('Th Td Ts 5c 2h'), '三条 10', '三条同理');
+    eq(desc('Ah Kh Qh Jh Th'), '皇家同花顺', '皇家同花顺不受影响');
+    eq(C.RANK_LABELS[8], '10', 'RANK_LABELS 第 9 项是 10');
+    eq(C.RANK_CHARS[8], 'T', '内部记号仍然是单字符 T');
+    eq(C.RANK_LABELS.length, 13, '标签表长度正确');
+    ok(C.RANK_LABELS.every((l, i) => i === 8 || l === C.RANK_CHARS[i]),
+      '除了 10，其余点数的两种写法一致');
   });
 
   suite('牌型大小排序', () => {
