@@ -9,6 +9,7 @@
 
   const Cards = window.PokerCards;
   const AI = window.PokerAI;
+  const Sound = window.PokerSound;
   const { HoldemEngine } = window.PokerEngine;
 
   const STORAGE_KEY = 'holdem_save_v1';
@@ -339,15 +340,48 @@
   // ---------- 事件播放 ----------
 
   async function flush() {
-    for (const e of engine.drainEvents()) logEvent(e);
+    for (const e of engine.drainEvents()) {
+      logEvent(e);
+      playEventSound(e);
+    }
     await syncBoard();
     render();
+  }
+
+  /** 事件 → 音效。放在这里是因为盲注、行动、结算都从同一条事件流经过。 */
+  function playEventSound(e) {
+    if (!Sound) return;
+    switch (e.type) {
+      case 'deal-hole':
+        Sound.deal(engine.livePlayers().length);
+        break;
+      case 'blind':
+        Sound.chips(0.15);
+        break;
+      case 'action':
+        if (e.action === 'fold') Sound.fold();
+        else if (e.action === 'check') Sound.knock();
+        else Sound.chips(betWeight(e.amount));
+        break;
+      case 'hand-end':
+        Sound.pot();
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** 下注额相对起始筹码的分量，用来决定扔多少颗筹码 */
+  function betWeight(amount) {
+    const reference = engine.startingChips || 1000;
+    return Math.min(1, (amount || engine.bigBlind) / (reference * 0.45));
   }
 
   /** 公共牌一张一张地翻出来，而不是整排突然出现 */
   async function syncBoard() {
     while (displayBoard.length < engine.board.length) {
       displayBoard.push(engine.board[displayBoard.length]);
+      if (Sound) Sound.flip();
       render();
       await sleep(displayBoard.length <= 3 ? 140 : 400);
     }
@@ -587,6 +621,8 @@
   // ---------- 启动 ----------
 
   function startGame(g) {
+    // 浏览器只允许在用户手势里启动音频，点「开打」正好是个手势
+    if (Sound) Sound.unlock();
     engine = g;
     humanResolve = null;
     $('log-body').innerHTML = '';
@@ -623,6 +659,20 @@
 
     $('log-toggle').onclick = () => $('log-panel').classList.toggle('hidden');
     $('log-close').onclick = () => $('log-panel').classList.add('hidden');
+
+    const soundBtn = $('sound-toggle');
+    const paintSoundBtn = () => {
+      const on = Sound && Sound.isEnabled();
+      soundBtn.textContent = on ? '🔊 声音' : '🔇 静音';
+      soundBtn.title = on ? '点击静音' : '点击开启声音';
+    };
+    soundBtn.onclick = () => {
+      if (!Sound) return;
+      Sound.setEnabled(!Sound.isEnabled());
+      paintSoundBtn();
+      if (Sound.isEnabled()) Sound.chips(0.3);   // 开启时给个反馈
+    };
+    paintSoundBtn();
 
     // 横竖屏切换时座位坐标要跟着换一套
     let resizeTimer = null;

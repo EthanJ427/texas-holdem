@@ -19,11 +19,19 @@
   <script src="../js/cards.js"></script>
   <script src="../js/engine.js"></script>
   <script src="../js/ai.js"></script>
+  <script src="../js/sound.js"></script>
 
   <script src="harness.js"></script>
   <script src="cards.test.js"></script>
   <script src="engine.test.js"></script>
   <script src="ai.test.js"></script>
-  <script>window.T.run();</script>
+  <script src="sound.test.js"></script>
+  <script>
+    // 音效用例要等离线渲染完成，所以整体收尾放在异步里
+    (async function () {
+      if (window.__soundTests) await window.__soundTests();
+      window.T.run();
+    })();
+  </script>
 </body>
 </html>
