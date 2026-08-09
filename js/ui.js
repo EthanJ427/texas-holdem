@@ -30,11 +30,11 @@
   // 不留余量的话底部会探进公共牌那一行。
   const SEAT_POSITIONS_NARROW = [
     { left: 50, top: 94 },
-    { left: 21, top: 78 },
-    { left: 21, top: 21 },
-    { left: 50, top: 6 },
-    { left: 79, top: 21 },
-    { left: 79, top: 78 },
+    { left: 22, top: 76 },
+    { left: 26, top: 24 },
+    { left: 50, top: 8 },
+    { left: 74, top: 24 },
+    { left: 78, top: 76 },
   ];
 
   // 下注筹码显示在座位朝向桌心的一侧。
@@ -62,6 +62,51 @@
   };
 
   const $ = (id) => document.getElementById(id);
+
+  /**
+   * 筹码颜色按金额档位走，沿用赌场的惯例配色。
+   * 注意不能按面额把金额拆开来堆 —— 那样 990 会拆成十几颗，
+   * 1000 反而只有一颗千元筹码，堆头大小和实际筹码量正好相反。
+   */
+  function chipTier(amount) {
+    if (amount >= 3000) return 'c1000';
+    if (amount >= 1000) return 'c500';
+    if (amount >= 200) return 'c100';
+    if (amount >= 50) return 'c25';
+    return 'c5';
+  }
+
+  /**
+   * 画一堆筹码：颗数与金额成正比，堆头大小就能一眼看出多少。
+   * unit 决定「一颗代表多少」，maxChips 封顶避免全下时铺满桌子。
+   */
+  function chipPileEl(amount, options) {
+    const opts = options || {};
+    const pile = document.createElement('div');
+    pile.className = 'chip-pile' + (opts.small ? ' small' : '');
+    if (!(amount > 0)) return pile;
+
+    const unit = Math.max(1, opts.unit || 1);
+    const maxChips = opts.maxChips || 12;
+    const perStack = opts.perStack || 6;
+    const count = Math.max(1, Math.min(Math.round(amount / unit), maxChips));
+    const cls = chipTier(amount);
+
+    let left = count;
+    while (left > 0) {
+      const column = document.createElement('div');
+      column.className = 'chip-stack';
+      const n = Math.min(left, perStack);
+      for (let i = 0; i < n; i++) {
+        const chip = document.createElement('div');
+        chip.className = 'chip ' + cls;
+        column.appendChild(chip);
+      }
+      pile.appendChild(column);
+      left -= n;
+    }
+    return pile;
+  }
 
   let engine = null;
   let displayBoard = [];
@@ -226,7 +271,6 @@
     dealer.textContent = 'D';
     dealer.style.left = (btnPos.left + (btnPos.left > 50 ? -14 : btnPos.left < 50 ? 14 : 16)) + '%';
     dealer.style.top = (btnPos.top + (btnPos.top > 50 ? -13 : 13)) + '%';
-    dealer.style.transform = 'translate(-50%, -50%)';
     seats.appendChild(dealer);
   }
 
@@ -282,12 +326,26 @@
       `<div class="plate-chips${p.busted ? ' busted' : ''}">${p.busted ? '出局' : p.chips}</div>`;
     seat.appendChild(plate);
 
+    // 剩余筹码也画成实物，输光了自然就没了
+    if (!p.busted && p.chips > 0) {
+      const bank = chipPileEl(p.chips, {
+        small: true,
+        unit: (engine.startingChips || 1000) / 12,
+        maxChips: 18,   // 赢到起始筹码的一倍半才封顶，赢钱看得出来
+      });
+      bank.classList.add('bank');
+      seat.appendChild(bank);
+    }
+
     // 竖屏时下注额跟着座位走，避免和公共牌抢地方
     if (p.bet > 0 && isNarrow()) {
       const bet = document.createElement('div');
       bet.className = 'seat-bet inline';
       if (isFresh(`bet:${i}:${p.bet}`)) bet.classList.add('changed');
-      bet.innerHTML = `<span class="chip-dot"></span>${p.bet}`;
+      bet.appendChild(chipPileEl(p.bet, { small: true, unit: engine.bigBlind, maxChips: 8, perStack: 4 }));
+      const label = document.createElement('span');
+      label.textContent = p.bet;
+      bet.appendChild(label);
       seat.appendChild(bet);
     }
 
@@ -312,8 +370,10 @@
     if (isFresh(`bet:${i}:${p.bet}`)) el.classList.add('changed');
     el.style.left = pos.left + '%';
     el.style.top = pos.top + '%';
-    el.style.transform = 'translate(-50%, -50%)';
-    el.innerHTML = `<span class="chip-dot"></span>${p.bet}`;
+    el.appendChild(chipPileEl(p.bet, { unit: engine.bigBlind, maxChips: 12 }));
+    const label = document.createElement('span');
+    label.textContent = p.bet;
+    el.appendChild(label);
     return el;
   }
 

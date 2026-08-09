@@ -16,6 +16,9 @@
   --card-w: 46px;
   --card-h: 66px;
   --radius: 12px;
+
+  /* 牌桌向后倾倒的角度。0 就是俯视图，越大越像坐在桌边看过去。 */
+  --tilt: 40deg;
 }
 
 * { box-sizing: border-box; }
@@ -163,14 +166,25 @@ button { font-family: inherit; cursor: pointer; }
   justify-content: center;
   padding: 8px 16px;
   min-height: 0;
+  /* 第一人称的关键：给整块牌桌一个透视灭点，
+     视点略高于桌心，于是近端更宽、远端收窄。 */
+  /* 灭点太靠上、透视太近的话，两侧座位会被切成明显的梯形。
+     这组数值是在「有纵深感」和「名牌不变形」之间折中出来的。 */
+  perspective: 1250px;
+  perspective-origin: 50% 34%;
 }
 
 .felt {
   position: relative;
-  width: min(100%, 940px);
-  aspect-ratio: 16 / 10;
+  /* 近端被透视放大约 28%，宽度要留出这部分余量，否则桌沿会被切掉，
+     近侧座位也会顶到行动栏上 */
+  width: min(76%, 760px);
+  /* 倾倒会把纵向压扁（乘 cos(tilt)），所以桌面本身要画得更"长"一些 */
+  aspect-ratio: 16 / 12;
   max-height: 100%;
   border-radius: 46% / 50%;
+  transform: rotateX(var(--tilt));
+  transform-style: preserve-3d;
   background:
     radial-gradient(ellipse at 50% 42%, #2a8159 0%, var(--felt) 45%, var(--felt-dark) 100%);
   border: 13px solid var(--rail);
@@ -190,11 +204,18 @@ button { font-family: inherit; cursor: pointer; }
   pointer-events: none;
 }
 
+/* 桌面倾倒后，这些元素要反向转回来立在桌上，否则文字和牌都会被压扁看不清 */
+.table-center,
+.seat,
+.seat-bet,
+.dealer-button {
+  transform: translate(-50%, -50%) rotateX(calc(-1 * var(--tilt)));
+}
+
 .table-center {
   position: absolute;
   left: 50%;
   top: 44%;
-  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -285,7 +306,6 @@ button { font-family: inherit; cursor: pointer; }
 
 .seat {
   position: absolute;
-  transform: translate(-50%, -50%);
   width: 128px;
   display: flex;
   flex-direction: column;
@@ -371,22 +391,21 @@ button { font-family: inherit; cursor: pointer; }
 .seat-status.allin { background: var(--danger); color: #fff; }
 .seat-status.thinking { background: var(--gold); color: #2a1d0b; }
 
-/* 座位前的下注筹码 */
+/* 座位前推出去的下注筹码 */
 .seat-bet {
   position: absolute;
   display: flex;
-  align-items: center;
-  gap: 4px;
+  align-items: flex-end;
+  gap: 5px;
   font-size: 11px;
   font-weight: 700;
   color: #fff;
-  background: rgba(0, 0, 0, .55);
-  border: 1px solid rgba(217, 178, 106, .35);
-  padding: 2px 8px;
-  border-radius: 12px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+
+.seat-bet > span { padding-bottom: 1px; }
 
 /* 同理：只有金额真的变了才弹一下 */
 .seat-bet.changed {
@@ -404,11 +423,48 @@ button { font-family: inherit; cursor: pointer; }
   transform: none;
 }
 
-.chip-dot {
-  width: 8px; height: 8px;
+/* ---------- 筹码 ---------- */
+
+/* 一堆筹码 = 若干摞并排。摞是从下往上叠的，所以用 column-reverse。 */
+.chip-pile {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.chip-stack {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+}
+
+/* 从低角度看过去，筹码是压扁的椭圆 */
+.chip {
+  width: 20px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--danger);
-  border: 1px solid rgba(255, 255, 255, .5);
+  margin-top: -4px;
+  border: 1px solid rgba(0, 0, 0, .5);
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, .3),
+    inset 0 1px 1px rgba(255, 255, 255, .45),
+    inset 0 -1px 1px rgba(0, 0, 0, .3);
+}
+
+.chip-pile.small .chip { width: 13px; height: 5px; margin-top: -3px; border-width: .5px; }
+.chip-pile.small { gap: 2px; }
+
+.chip.c1    { background: linear-gradient(180deg, #fbfaf7, #d8d2c6); }
+.chip.c5    { background: linear-gradient(180deg, #d9483a, #a5291d); }
+.chip.c25   { background: linear-gradient(180deg, #3fa06a, #24704a); }
+.chip.c100  { background: linear-gradient(180deg, #3b4148, #1c2025); }
+.chip.c500  { background: linear-gradient(180deg, #8663c4, #543a86); }
+.chip.c1000 { background: linear-gradient(180deg, #e6b93f, #a97f16); }
+
+/* 座位自己的家底，摆在名牌下面 */
+.chip-pile.bank {
+  margin-top: 3px;
+  opacity: .9;
 }
 
 /* 庄家按钮 */
@@ -642,12 +698,14 @@ button { font-family: inherit; cursor: pointer; }
 /* ---------- 窄屏适配 ---------- */
 
 @media (max-width: 780px) {
-  :root { --card-w: 34px; --card-h: 49px; }
+  /* 竖屏纵向本来就紧张，倾角要收一些，否则近端的座位会顶出屏幕 */
+  :root { --card-w: 34px; --card-h: 49px; --tilt: 26deg; }
   .seat { width: 92px; }
   .plate { padding: 4px 5px; }
   .plate-name { font-size: 11px; }
   .plate-chips { font-size: 12px; }
-  .felt { border-width: 9px; aspect-ratio: 3 / 4; }
+  /* 竖屏倾角只有 26°，近端撑开得少，宽度可以放回来 */
+  .felt { border-width: 9px; aspect-ratio: 3 / 4; width: min(92%, 760px); }
   .table-center { width: 94%; top: 40%; }
   .board { flex-wrap: wrap; justify-content: center; }
   .log-panel { width: 100%; }

@@ -37,6 +37,25 @@
   }
 
   /**
+   * 主输出链：master → 低通 → 输出。
+   * 那条低通是刻意加的 —— 牌桌上的声音本来就没什么高频，
+   * 不砍掉 2.4kHz 以上，噪声听起来就是「呲呲」的齿音，很扎耳朵。
+   */
+  function buildGraph(context) {
+    master = context.createGain();
+    master.gain.value = MASTER_GAIN;
+
+    const tame = context.createBiquadFilter();
+    tame.type = 'lowpass';
+    tame.frequency.value = 2400;
+    tame.Q.value = 0.5;
+
+    master.connect(tame);
+    tame.connect(context.destination);
+    noise = makeNoise(context);
+  }
+
+  /**
    * 在用户手势里调用，创建（或恢复）音频上下文。
    * 传入 injected 可以换成别的上下文 —— 测试用 OfflineAudioContext 离线渲染，
    * 这样不需要用户手势就能验证「到底有没有声音出来」。
@@ -45,10 +64,7 @@
     if (injected) {
       ctx = injected;
       offline = true;
-      master = ctx.createGain();
-      master.gain.value = MASTER_GAIN;
-      master.connect(ctx.destination);
-      noise = makeNoise(ctx);
+      buildGraph(ctx);
       return true;
     }
     if (!ctx) {
@@ -56,10 +72,7 @@
       if (!AC) return false;          // 环境不支持就安静运行
       try {
         ctx = new AC();
-        master = ctx.createGain();
-        master.gain.value = MASTER_GAIN;
-        master.connect(ctx.destination);
-        noise = makeNoise(ctx);
+        buildGraph(ctx);
       } catch (e) {
         ctx = null;
         return false;
@@ -86,6 +99,13 @@
     filter.frequency.value = opts.freq;
     filter.Q.value = opts.q || 1;
 
+    // 第二级低通。单个 biquad 只有 12dB/oct，滚降太缓，
+    // 高频漏出来就是「呲呲」的齿音；级联一级变成 24dB/oct 才压得住。
+    const polish = ctx.createBiquadFilter();
+    polish.type = 'lowpass';
+    polish.frequency.value = Math.min(opts.freq * 1.5, 2400);
+    polish.Q.value = 0.5;
+
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.0001, at);
     gain.gain.exponentialRampToValueAtTime(opts.peak, at + (opts.attack || 0.004));
@@ -94,16 +114,17 @@
     // 从噪声缓冲的随机位置起播，避免每次听起来一模一样
     const offset = Math.random() * 0.8;
     src.connect(filter);
-    filter.connect(gain);
+    filter.connect(polish);
+    polish.connect(gain);
     gain.connect(master);
     src.start(at, offset, opts.decay + 0.05);
     src.stop(at + opts.decay + 0.05);
   }
 
-  /** 一个带音高的短音，用来做筹码的金属感和敲桌子的闷响 */
+  /** 一个带音高的短音，用来做筹码落桌和敲桌子的闷响 */
   function tone(at, opts) {
     const osc = ctx.createOscillator();
-    osc.type = opts.type || 'triangle';
+    osc.type = opts.type || 'sine';
     osc.frequency.setValueAtTime(opts.from, at);
     if (opts.to) osc.frequency.exponentialRampToValueAtTime(opts.to, at + opts.decay);
 
@@ -120,14 +141,21 @@
 
   // ---------- 具体音效 ----------
 
-  /** 发一张牌：牌面擦过桌布的短促「唰」 */
+  /**
+   * 发一张牌：牌面擦过桌布再落下。
+   * 关键是频率要低 —— 纸牌摩擦是低频的「呼」，不是高频的「呲」。
+   * 用低通而不是带通，避免在齿音区留下一个尖峰。
+   */
   function card(delay) {
     if (!ready()) return;
     const at = now() + (delay || 0);
+    // 擦过桌面
     burst(at, {
-      freq: 1800 + Math.random() * 900,
-      q: 0.9, peak: 0.34, decay: 0.11, rate: 1.3 + Math.random() * 0.3,
+      type: 'lowpass', freq: 700 + Math.random() * 180, q: 0.4,
+      peak: 0.58, decay: 0.13, attack: 0.014, rate: 0.55 + Math.random() * 0.15,
     });
+    // 落下时的轻拍
+    tone(at + 0.055, { type: 'sine', from: 210, to: 95, peak: 0.16, decay: 0.07 });
   }
 
   /** 一叠牌依次发出去，用于每手开局 */
@@ -139,7 +167,7 @@
 
   /**
    * 筹码推进底池。weight 0~1，越大扔得越多、越响。
-   * 每颗筹码 = 一个高频短音 + 一点噪声，叠在一起就是「哗啦」。
+   * 每颗筹码 = 一个低频短音 + 一点低通噪声，叠在一起就是「哒哒哒」。
    */
   function chips(weight) {
     if (!ready()) return;
@@ -148,17 +176,19 @@
     const base = now();
 
     for (let i = 0; i < count; i++) {
-      const at = base + i * (0.014 + Math.random() * 0.022);
+      const at = base + i * (0.016 + Math.random() * 0.024);
+      // 黏土筹码是「哒」不是「叮」：基频低、衰减快、几乎没有余韵
       tone(at, {
-        type: 'triangle',
-        from: 1700 + Math.random() * 1500,
-        to: 700 + Math.random() * 300,
-        peak: 0.07 + w * 0.06,
-        decay: 0.07 + Math.random() * 0.04,
+        type: 'sine',
+        from: 420 + Math.random() * 260,
+        to: 170 + Math.random() * 70,
+        peak: 0.16 + w * 0.1,
+        decay: 0.045 + Math.random() * 0.02,
       });
+      // 一点点低通噪声做碰撞的颗粒感，别让它变成纯音
       burst(at, {
-        type: 'highpass', freq: 3200, q: 0.7,
-        peak: 0.07 + w * 0.05, decay: 0.035, rate: 1.6,
+        type: 'lowpass', freq: 820, q: 0.4,
+        peak: 0.13 + w * 0.07, decay: 0.028, attack: 0.002, rate: 0.9,
       });
     }
   }
@@ -175,8 +205,14 @@
   function fold() {
     if (!ready()) return;
     const at = now();
-    burst(at, { freq: 1100, q: 0.7, peak: 0.16, decay: 0.2, rate: 0.75 });
-    burst(at + 0.05, { freq: 900, q: 0.7, peak: 0.11, decay: 0.16, rate: 0.7 });
+    burst(at, {
+      type: 'lowpass', freq: 620, q: 0.4,
+      peak: 0.34, decay: 0.22, attack: 0.02, rate: 0.45,
+    });
+    burst(at + 0.06, {
+      type: 'lowpass', freq: 520, q: 0.4,
+      peak: 0.24, decay: 0.18, attack: 0.02, rate: 0.4,
+    });
   }
 
   /** 收底池：一大把筹码被拨到面前 */
@@ -184,22 +220,31 @@
     if (!ready()) return;
     const base = now();
     for (let i = 0; i < 14; i++) {
-      const at = base + i * (0.022 + Math.random() * 0.03);
+      const at = base + i * (0.024 + Math.random() * 0.032);
       tone(at, {
-        type: 'triangle',
-        from: 1500 + Math.random() * 1600,
-        to: 600 + Math.random() * 400,
-        peak: 0.045,
-        decay: 0.08 + Math.random() * 0.05,
+        type: 'sine',
+        from: 380 + Math.random() * 280,
+        to: 150 + Math.random() * 80,
+        peak: 0.12,
+        decay: 0.05 + Math.random() * 0.03,
       });
     }
-    burst(base, { type: 'bandpass', freq: 2600, q: 0.5, peak: 0.1, decay: 0.42, rate: 0.9 });
+    // 筹码被推过桌布的底噪
+    burst(base, {
+      type: 'lowpass', freq: 700, q: 0.4,
+      peak: 0.18, decay: 0.45, attack: 0.03, rate: 0.5,
+    });
   }
 
-  /** 翻开公共牌：比发牌更清脆一点 */
+  /** 翻开公共牌：牌拍到桌面上，比发牌更短促干脆 */
   function flip() {
     if (!ready()) return;
-    burst(now(), { freq: 2600 + Math.random() * 800, q: 1.1, peak: 0.32, decay: 0.09, rate: 1.5 });
+    const at = now();
+    burst(at, {
+      type: 'lowpass', freq: 880 + Math.random() * 180, q: 0.5,
+      peak: 0.52, decay: 0.075, attack: 0.004, rate: 0.75,
+    });
+    tone(at, { type: 'sine', from: 260, to: 110, peak: 0.2, decay: 0.06 });
   }
 
   // ---------- 开关 ----------

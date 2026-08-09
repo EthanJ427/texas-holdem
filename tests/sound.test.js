@@ -25,11 +25,16 @@
 
     let peak = 0;
     let energy = 0;
+    let diffEnergy = 0;
     let loud = 0;
     for (let i = 0; i < data.length; i++) {
       const v = Math.abs(data[i]);
       if (v > peak) peak = v;
       energy += data[i] * data[i];
+      if (i > 0) {
+        const d = data[i] - data[i - 1];
+        diffEnergy += d * d;
+      }
       if (v > 0.005) loud++;
     }
     return {
@@ -37,6 +42,9 @@
       rms: Math.sqrt(energy / data.length),
       loudRatio: loud / data.length,
       samples: data.length,
+      // 一阶差分能量占比 —— 廉价的「亮度」代理。
+      // 低频为主的声音这个值很小；嘶嘶的高频噪声会明显偏大。
+      brightness: energy > 0 ? diffEnergy / energy : 0,
     };
   }
 
@@ -62,6 +70,18 @@
       for (const [name, r] of cases) {
         ok(r.peak > 0.01, `${name}：峰值 ${r.peak.toFixed(4)}（不是静音）`);
         ok(r.peak <= 1.0, `${name}：峰值未削顶（${r.peak.toFixed(4)} ≤ 1.0）`);
+      }
+    });
+
+    suite('声音不刺耳（高频能量受控）', () => {
+      // 「呲呲」的齿音来自高频噪声。用一阶差分能量占比当亮度代理：
+      // 0.02 附近是低频闷响，0.3 以上就是明显的嘶声了。
+      const cases = [
+        ['发牌', card], ['筹码', chips], ['敲桌', knock],
+        ['弃牌', fold], ['翻公共牌', flip], ['收底池', pot],
+      ];
+      for (const [name, r] of cases) {
+        ok(r.brightness < 0.25, `${name}：亮度 ${r.brightness.toFixed(4)}（低于刺耳阈值 0.25）`);
       }
     });
 
