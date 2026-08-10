@@ -648,6 +648,36 @@
       };
     }
 
+    /**
+     * 裁剪事件流。
+     *
+     * 事件是状态之外的第二条出口，很容易被忽略：showdown / hand-end 事件里
+     * 直接挂着 hands 和 result，其中的 best 含底牌。现在它恰好只包含没弃牌的人，
+     * 但那是 showdown() 内部实现的巧合，不是被守住的约束 ——
+     * 有人改了构造方式，牌就会绕过 viewFor 从这里漏出去。
+     *
+     * 所以规则很简单：事件只负责「播动画」，一律不携带牌面数据。
+     * 公共牌是公开的可以留；摊牌要亮的牌，客户端从 state 里拿（那份已经裁剪过）。
+     */
+    eventsFor(viewerId, events) {
+      return (events || []).map((e) => {
+        const out = {};
+        for (const key of Object.keys(e)) {
+          if (key === 'hands' || key === 'result') continue;   // 含底牌，不走这条通道
+          out[key] = e[key];
+        }
+        return out;
+      });
+    }
+
+    /** 事件里允许出现的字段名，同样是白名单。 */
+    static get EVENT_KEYS() {
+      return [
+        'type', 'text', 'player', 'action', 'amount', 'label',
+        'handNumber', 'button', 'street', 'board', 'winner',
+      ];
+    }
+
     /** 视图里允许出现的字段名。新增字段必须先登记在这里，否则测试会失败。 */
     static get VIEW_KEYS() {
       return [

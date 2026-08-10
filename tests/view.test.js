@@ -140,6 +140,67 @@
     ok(HoldemEngine.VIEW_KEYS.includes('hole'), '白名单本身是有效的（含 hole）');
   });
 
+  suite('事件流同样不带牌面数据', () => {
+    // 事件是状态之外的第二条出口。上面那些用例只盯着 viewFor，
+    // 事件通道曾经完全没人管 —— showdown / hand-end 事件里直接挂着 hands 和
+    // result，其中的 best 含底牌。这组用例把它也纳入白名单管辖。
+    const g = makeEngine(6);
+    let unknown = [];
+    let cardCarrying = [];
+    let seen = 0;
+
+    for (let h = 0; h < 40; h++) {
+      g.players.forEach((p) => { p.chips = 1000; p.busted = false; });
+      if (!g.startHand()) break;
+      let guard = 0;
+      const drain = () => {
+        const raw = g.drainEvents();
+        const safe = g.eventsFor(0, raw);
+        for (const e of safe) {
+          seen++;
+          for (const k of Object.keys(e)) {
+            if (!HoldemEngine.EVENT_KEYS.includes(k)) unknown.push(`${e.type}.${k}`);
+            if (k === 'hands' || k === 'result' || k === 'hole' || k === 'deck') {
+              cardCarrying.push(`${e.type}.${k}`);
+            }
+          }
+        }
+      };
+      drain();
+      while (!g.handOver && guard++ < 300) {
+        const legal = g.legalActions();
+        const pick = legal[(Math.random() * legal.length) | 0];
+        if (pick.type === 'bet' || pick.type === 'raise') g.act(pick.type, pick.min);
+        else g.act(pick.type);
+        drain();
+      }
+      drain();
+    }
+
+    eq([...new Set(unknown)].join(','), '', '事件里没有白名单之外的字段');
+    eq([...new Set(cardCarrying)].join(','), '', '事件里不含 hands / result / hole / deck');
+    ok(seen > 400, `检查了 ${seen} 条事件`);
+  });
+
+  suite('事件裁剪确实拿掉了东西（反向对照）', () => {
+    // 同样要防「eventsFor 直接返回空数组也能通过」这种假通过
+    const g = makeEngine(3);
+    g.startHand();
+    let guard = 0;
+    while (!g.handOver && guard++ < 200) {
+      const legal = g.legalActions();
+      g.act(legal.find((a) => a.type === 'call') ? 'call' : 'check');
+    }
+    const raw = g.drainEvents();
+    const safe = g.eventsFor(0, raw);
+
+    eq(safe.length, raw.length, '事件条数不变，只是把敏感字段摘掉');
+    ok(raw.some((e) => 'result' in e || 'hands' in e), '原始事件里确实带着 result / hands');
+    ok(safe.every((e) => !('result' in e) && !('hands' in e)), '裁剪后一条都不剩');
+    ok(safe.every((e) => typeof e.type === 'string'), '事件类型保留下来了');
+    ok(safe.some((e) => typeof e.text === 'string' && e.text.length > 0), '播报文案保留下来了');
+  });
+
   suite('反向对照：该看见的必须看得见', () => {
     // 只测「没泄漏」是不够的 —— 一个永远返回空对象的 viewFor 也能通过上面所有用例。
     const g = makeEngine(6);
