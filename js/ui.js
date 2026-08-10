@@ -331,8 +331,8 @@
       const bank = chipPileEl(p.chips, {
         small: true,
         unit: (engine.startingChips || 1000) / 12,
-        maxChips: 21,   // 赢到起始筹码的一倍半才封顶，赢钱看得出来
-        perStack: 7,    // 摞得高一点，更像真实牌桌上的筹码柱
+        maxChips: 24,   // 赢到起始筹码的两倍才封顶，赢钱看得出来
+        perStack: 12,   // 又高又窄，才像真实牌桌上的筹码柱
       });
       bank.classList.add('bank');
       seat.appendChild(bank);
@@ -343,7 +343,7 @@
       const bet = document.createElement('div');
       bet.className = 'seat-bet inline';
       if (isFresh(`bet:${i}:${p.bet}`)) bet.classList.add('changed');
-      bet.appendChild(chipPileEl(p.bet, { small: true, unit: engine.bigBlind, maxChips: 8, perStack: 4 }));
+      bet.appendChild(chipPileEl(p.bet, { small: true, unit: engine.bigBlind, maxChips: 10, perStack: 5 }));
       const label = document.createElement('span');
       label.textContent = p.bet;
       bet.appendChild(label);
@@ -371,7 +371,7 @@
     if (isFresh(`bet:${i}:${p.bet}`)) el.classList.add('changed');
     el.style.left = pos.left + '%';
     el.style.top = pos.top + '%';
-    el.appendChild(chipPileEl(p.bet, { unit: engine.bigBlind, maxChips: 12 }));
+    el.appendChild(chipPileEl(p.bet, { unit: engine.bigBlind, maxChips: 16, perStack: 8 }));
     const label = document.createElement('span');
     label.textContent = p.bet;
     el.appendChild(label);
