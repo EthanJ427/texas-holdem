@@ -242,6 +242,9 @@ button { font-family: inherit; cursor: pointer; }
 .seat-bet,
 .dealer-button {
   transform: translate(-50%, -50%) rotateX(calc(-1 * var(--tilt)));
+  /* 必须保留 3D：否则子元素的 rotateX 会被压平成单纯的纵向缩放，
+     牌只是"变矮"了，没有近宽远窄的透视收敛，看着仍然是贴上去的矩形。 */
+  transform-style: preserve-3d;
 }
 
 .table-center {
@@ -272,19 +275,16 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   gap: 6px;
   min-height: var(--card-h);
-  align-items: flex-end;
+  align-items: center;
   transform-style: preserve-3d;
 }
 
 .board .card {
-  transform: translateZ(14px);
-  transform-origin: 50% 100%;
-  box-shadow:
-    0 2px 3px rgba(0, 0, 0, .55),
-    0 12px 16px -6px rgba(0, 0, 0, .85);
+  transform: rotateX(var(--tilt)) translateZ(4px);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .25);
 }
 
-.board .card.winning { transform: translateZ(14px) translateY(-6px); }
+.board .card.winning { transform: rotateX(var(--tilt)) translateZ(14px); }
 
 .street-label {
   font-size: 11px;
@@ -370,32 +370,32 @@ button { font-family: inherit; cursor: pointer; }
   gap: 3px;
   height: calc(var(--card-h) * .82);
   transform-style: preserve-3d;
-  align-items: flex-end;
+  align-items: center;
 }
 
-/* 往观察者方向抬起，但不加任何倾斜。
-   倾斜会让牌不再与屏幕平行，左右两侧的座位偏离灭点，
-   那点倾斜就被透视放大成明显的斜切，看着像歪倒的。
-   「立着」的感觉改由抬升 + 落地阴影来给。
-   另外千万不能往后仰：桌面是真实存在的 3D 平面，一后仰就扎进毡面里。 */
+/*
+ * 牌是平摊在桌面上的，不是立着的广告牌。
+ *
+ * 座位整体被反向旋转了 --tilt 好让文字正对屏幕；这里再转回 +--tilt，
+ * 净效果就是牌重新躺回桌面那个平面里，跟着桌子一起透视收缩。
+ * 之前所有东西都正对屏幕，所以看着像贴上去的图片而不是放在桌上的实物。
+ * translateZ 沿桌面法线抬一点，避免和毡面打架。
+ */
 .seat-cards .card {
-  transform: translateZ(12px);
-  transform-origin: 50% 100%;   /* 以牌根为轴，像立在桌上 */
-  box-shadow:
-    0 2px 3px rgba(0, 0, 0, .55),
-    0 10px 14px -6px rgba(0, 0, 0, .8);
+  transform: rotateX(var(--tilt)) translateZ(4px);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .25);
 }
 
 /* 自己的两张牌稍微摊开，像是捏在手里看 */
 .seat.me .seat-cards { gap: 5px; }
-.seat.me .seat-cards .card:first-child { transform: translateZ(12px) rotate(-4deg); }
-.seat.me .seat-cards .card:last-child  { transform: translateZ(12px) rotate(4deg); }
+.seat.me .seat-cards .card:first-child { transform: rotateX(var(--tilt)) translateZ(4px) rotate(-5deg); }
+.seat.me .seat-cards .card:last-child  { transform: rotateX(var(--tilt)) translateZ(4px) rotate(5deg); }
 
 /* 摊牌高亮时要保留「立着」的姿态，否则赢家的牌会突然躺平 */
 .seat-cards .card.winning,
 .seat.me .seat-cards .card.winning:first-child,
 .seat.me .seat-cards .card.winning:last-child {
-  transform: translateZ(12px) translateY(-5px);
+  transform: rotateX(var(--tilt)) translateZ(14px);
 }
 
 .seat.me .seat-cards { height: var(--card-h); }
@@ -501,64 +501,56 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---------- 筹码 ---------- */
 
-/* 一堆筹码 = 若干摞并排。摞是从下往上叠的，所以用 column-reverse。 */
+/*
+ * 筹码是真的立在桌面上的圆柱，不是画出来的椭圆。
+ *
+ * 每一片都躺平在桌面平面里（rotateX 抵消掉座位的反向旋转），
+ * 然后沿桌面法线一片片往上摞。透视会自动把正圆压成椭圆，
+ * 相邻两片在屏幕上错开的那点距离就是柱体的侧壁。
+ * 之前用负 margin 假装堆叠，所以怎么调都像几个椭圆挤在一起。
+ */
 .chip-pile {
   display: flex;
   align-items: flex-end;
-  gap: 3px;
+  gap: 4px;
+  transform-style: preserve-3d;
 }
 
 .chip-stack {
-  display: flex;
-  flex-direction: column-reverse;
-  align-items: center;
+  position: relative;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  transform-style: preserve-3d;
 }
 
-/*
- * 一颗筹码。真实筹码从低角度看是压扁的椭圆，边缘有一圈白色条纹，
- * 中间是纯色的牌面 —— 条纹用 repeating-conic-gradient 画，
- * 牌面用一层 radial-gradient 盖在中心。
- *
- * 厚度靠 box-shadow 往下堆几层同色描边做出侧壁，
- * 再配合负 margin 叠放，就有了一摞筹码的层次。
- */
 .chip {
   --chip-face: #d9483a;
   --chip-edge: #8e2418;
-  width: 26px;
-  height: 9px;
+  --chip-i: 0;
+  position: absolute;
+  inset: 0;
   border-radius: 50%;
-  /* 负 margin 只吃掉一半高度，每颗露出约 4.5px 侧壁，
-     堆十几颗才有真实筹码柱那种又高又窄的样子 */
-  margin-top: -4.5px;
+  /* 躺回桌面平面，再按序号沿法线往上摞 */
+  transform: rotateX(var(--tilt)) translateZ(calc(var(--chip-i) * 3.4px));
   background:
-    radial-gradient(ellipse at 50% 50%,
-      var(--chip-face) 0 46%,
-      rgba(0, 0, 0, .18) 46% 50%,
-      transparent 50%),
+    radial-gradient(circle at 50% 50%,
+      var(--chip-face) 0 44%,
+      rgba(0, 0, 0, .22) 44% 49%,
+      transparent 49%),
     repeating-conic-gradient(from 10deg,
       var(--chip-face) 0 20deg,
       #f2ede2 20deg 32deg);
   box-shadow:
-    /* 侧壁：三层同色描边堆出厚度 */
-    0 1px 0 var(--chip-edge),
-    0 2px 0 var(--chip-edge),
-    0 3px 0 color-mix(in srgb, var(--chip-edge) 70%, #000),
-    /* 落在桌面上的接触阴影 */
-    0 5px 5px -2px rgba(0, 0, 0, .6);
+    0 0 0 1px var(--chip-edge),
+    0 2px 3px rgba(0, 0, 0, .45);
 }
 
-.chip-pile.small .chip {
-  width: 21px;
-  height: 7px;
-  /* 负 margin 比高度小得越多，每颗露出的侧壁就越多，摞起来越高 */
-  margin-top: -3px;
-  box-shadow:
-    0 1px 0 var(--chip-edge),
-    0 2px 0 color-mix(in srgb, var(--chip-edge) 70%, #000),
-    0 4px 5px -2px rgba(0, 0, 0, .65);
-}
 .chip-pile.small { gap: 3px; }
+.chip-pile.small .chip-stack { width: 18px; height: 18px; }
+.chip-pile.small .chip {
+  transform: rotateX(var(--tilt)) translateZ(calc(var(--chip-i) * 2.4px));
+}
 
 .chip.c1    { --chip-face: #eae4d6; --chip-edge: #9c957f; }
 .chip.c5    { --chip-face: #d9483a; --chip-edge: #8e2418; }

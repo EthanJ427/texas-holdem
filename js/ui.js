@@ -100,6 +100,8 @@
       for (let i = 0; i < n; i++) {
         const chip = document.createElement('div');
         chip.className = 'chip ' + cls;
+        // 序号交给 CSS，用来沿桌面法线把这一片往上摞
+        chip.style.setProperty('--chip-i', String(i));
         column.appendChild(chip);
       }
       pile.appendChild(column);
