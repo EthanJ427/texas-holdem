@@ -54,6 +54,12 @@
       return;
     }
 
+    // 静音开关是存在 localStorage 里的用户偏好。不强制打开的话，
+    // 只要在游戏里点过一次静音，这里所有音效都会渲染成全零波形，
+    // 测试结果就变成「取决于你上次玩的时候有没有静音」。
+    const userPreference = S.isEnabled();
+    S.setEnabled(true);
+
     const card = await render(() => S.card());
     const chips = await render(() => S.chips(0.8));
     const knock = await render(() => S.knock());
@@ -109,12 +115,10 @@
         `全下的筹码声明显多于小注（${(bigSum / rounds * 100).toFixed(1)}% vs ${(smallSum / rounds * 100).toFixed(1)}%）`);
     });
 
-    const wasEnabled = S.isEnabled();
     S.setEnabled(false);
     const muted = await render(() => { S.card(); S.chips(1); S.pot(); }, 1.6);
     S.setEnabled(true);
     const unmuted = await render(() => S.chips(0.8));
-    S.setEnabled(wasEnabled);
 
     suite('静音开关真的能切断声音', () => {
       eq(muted.peak, 0, '静音后渲染出来的是全零波形');
@@ -131,5 +135,8 @@
       } catch (e) { threw = e.message; }
       eq(threw, null, '静音状态下调用任何音效都不会抛异常');
     });
+
+    // 还原玩家自己的静音选择，测试不该改掉用户偏好
+    S.setEnabled(userPreference);
   };
 })();

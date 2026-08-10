@@ -19,6 +19,8 @@
 
   /* 牌桌向后倾倒的角度。0 就是俯视图，越大越像坐在桌边看过去。 */
   --tilt: 40deg;
+  /* 桌面相对于座位所在平面往后退的距离，用来彻底避开 3D 遮挡 */
+  --surface-depth: 70px;
 }
 
 * { box-sizing: border-box; }
@@ -174,17 +176,44 @@ button { font-family: inherit; cursor: pointer; }
   perspective-origin: 50% 34%;
 }
 
+/*
+ * .felt 本身只是个不可见的 3D 框架，绿色桌面画在 ::before 上，
+ * 并且沿法线往后推 --surface-depth。
+ *
+ * 这么绕是有原因的：座位要反向旋转才能立起来，而旋转是绕各自中心做的，
+ * 中心以下的部分必然会沉到桌面平面之下。桌面如果和它们共面，
+ * 近端的桌沿就会盖住牌 —— 抬高座位只能治标，总有边界情况。
+ * 把桌面整体挪到一个「平行且更靠后」的平面上，两个平面永不相交，遮挡就没了。
+ */
 .felt {
   position: relative;
   /* 近端被透视放大约 28%，宽度要留出这部分余量，否则桌沿会被切掉，
      近侧座位也会顶到行动栏上 */
-  width: min(76%, 760px);
-  /* 倾倒会把纵向压扁（乘 cos(tilt)），所以桌面本身要画得更"长"一些 */
-  aspect-ratio: 16 / 12;
+  width: min(84%, 900px);
+  /* 真实德州桌是狭长的跑道形。倾倒会再把纵向压掉约四分之一，
+     所以这里要先给得比目标更"扁"，投影出来才够长。 */
+  aspect-ratio: 16 / 9.5;
   max-height: 100%;
-  border-radius: 46% / 50%;
   transform: rotateX(var(--tilt));
   transform-style: preserve-3d;
+}
+
+.felt::before,
+.felt::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  /* 往后推之后投影会变小，按 (透视+深度)/透视 放大补回来。
+     放大绕的是元素中心，透视绕的是灭点，两者不完全重合，
+     所以还要往上补一点位移才能和座位对齐。 */
+  transform: translateZ(calc(-1 * var(--surface-depth))) scale(1.056) translateY(-2.5%);
+}
+
+/* 绿色桌面与木质桌沿 */
+.felt::before {
+  inset: 0;
+  /* 跑道形：左右两端是半圆，上下是直边。用百分比的话会变成正椭圆，太圆。 */
+  border-radius: 999px;
   background:
     radial-gradient(ellipse at 50% 42%, #2a8159 0%, var(--felt) 45%, var(--felt-dark) 100%);
   border: 13px solid var(--rail);
@@ -196,15 +225,18 @@ button { font-family: inherit; cursor: pointer; }
 
 /* 桌面内圈的装饰线 */
 .felt::after {
-  content: "";
-  position: absolute;
   inset: 6%;
-  border-radius: 46% / 50%;
+  border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, .07);
-  pointer-events: none;
 }
 
-/* 桌面倾倒后，这些元素要反向转回来立在桌上，否则文字和牌都会被压扁看不清 */
+/*
+ * 桌面倾倒后，这些元素要反向转回来立在桌上，否则文字和牌都会被压扁看不清。
+ *
+ * 末尾那个 translateZ 是必须的：反向旋转是绕元素中心做的，
+ * 中心以下的部分会被推到桌面平面之后，被毡面挡住 —— 公共牌的下半截
+ * （花色那一行）就是这么消失的。沿法线整体抬起来才能盖在桌面之上。
+ */
 .table-center,
 .seat,
 .seat-bet,
@@ -235,12 +267,24 @@ button { font-family: inherit; cursor: pointer; }
 .pot-label { font-size: 11px; color: var(--gold); letter-spacing: 1px; }
 .pot-amount { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
+/* 公共牌同样立在桌面上，和底牌保持一致的姿态 */
 .board {
   display: flex;
   gap: 6px;
   min-height: var(--card-h);
-  align-items: center;
+  align-items: flex-end;
+  transform-style: preserve-3d;
 }
+
+.board .card {
+  transform: translateZ(14px) rotateX(-7deg);
+  transform-origin: 50% 100%;
+  box-shadow:
+    0 2px 3px rgba(0, 0, 0, .55),
+    0 12px 16px -6px rgba(0, 0, 0, .85);
+}
+
+.board .card.winning { transform: translateZ(14px) rotateX(-7deg) translateY(-6px); }
 
 .street-label {
   font-size: 11px;
@@ -316,10 +360,40 @@ button { font-family: inherit; cursor: pointer; }
 
 .seat.folded { opacity: .38; }
 
+/*
+ * 底牌立在桌面上。
+ * 座位整体已经反向转正了，这里再让牌往后仰一点，
+ * 加上牌根的接地阴影，看起来才像立在毡面上的实物，而不是贴上去的图片。
+ */
 .seat-cards {
   display: flex;
   gap: 3px;
   height: calc(var(--card-h) * .82);
+  transform-style: preserve-3d;
+  align-items: flex-end;
+}
+
+/* 往观察者方向抬起并微微前倾。
+   千万不能往后仰 —— 桌面是个真实存在的 3D 平面，
+   牌一后仰就会扎进毡面里，上半截直接被挡掉。 */
+.seat-cards .card {
+  transform: translateZ(12px) rotateX(-7deg);
+  transform-origin: 50% 100%;   /* 以牌根为轴，像立在桌上 */
+  box-shadow:
+    0 2px 3px rgba(0, 0, 0, .55),
+    0 10px 14px -6px rgba(0, 0, 0, .8);
+}
+
+/* 自己的两张牌稍微摊开，像是捏在手里看 */
+.seat.me .seat-cards { gap: 5px; }
+.seat.me .seat-cards .card:first-child { transform: translateZ(12px) rotateX(-7deg) rotate(-4deg); }
+.seat.me .seat-cards .card:last-child  { transform: translateZ(12px) rotateX(-7deg) rotate(4deg); }
+
+/* 摊牌高亮时要保留「立着」的姿态，否则赢家的牌会突然躺平 */
+.seat-cards .card.winning,
+.seat.me .seat-cards .card.winning:first-child,
+.seat.me .seat-cards .card.winning:last-child {
+  transform: translateZ(12px) rotateX(-7deg) translateY(-5px);
 }
 
 .seat.me .seat-cards { height: var(--card-h); }
