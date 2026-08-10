@@ -14,7 +14,7 @@
 
   // 总音量。牌桌音效大多是短促的瞬态，滤波之后实际峰值只有目标值的三分之一左右，
   // 所以这里要留够增益，否则听起来跟没开一样。
-  const MASTER_GAIN = 0.7;
+  const MASTER_GAIN = 0.5;
 
   let ctx = null;
   let master = null;
@@ -38,8 +38,8 @@
 
   /**
    * 主输出链：master → 低通 → 输出。
-   * 那条低通是刻意加的 —— 牌桌上的声音本来就没什么高频，
-   * 不砍掉 2.4kHz 以上，噪声听起来就是「呲呲」的齿音，很扎耳朵。
+   * 那条低通是刻意加的：不砍掉最高的那截，噪声听起来就是「呲呲」的齿音。
+   * 但也不能砍太狠 —— 压到 2.4kHz 时整体又闷得像在敲门，3.4kHz 是折中。
    */
   function buildGraph(context) {
     master = context.createGain();
@@ -47,7 +47,7 @@
 
     const tame = context.createBiquadFilter();
     tame.type = 'lowpass';
-    tame.frequency.value = 2400;
+    tame.frequency.value = 3400;
     tame.Q.value = 0.5;
 
     master.connect(tame);
@@ -103,7 +103,7 @@
     // 高频漏出来就是「呲呲」的齿音；级联一级变成 24dB/oct 才压得住。
     const polish = ctx.createBiquadFilter();
     polish.type = 'lowpass';
-    polish.frequency.value = Math.min(opts.freq * 1.5, 2400);
+    polish.frequency.value = Math.min(opts.freq * 1.6, 3400);
     polish.Q.value = 0.5;
 
     const gain = ctx.createGain();
@@ -121,7 +121,7 @@
     src.stop(at + opts.decay + 0.05);
   }
 
-  /** 一个带音高的短音，用来做筹码落桌和敲桌子的闷响 */
+  /** 一个带音高的短音，用来做筹码碰撞和敲桌子 */
   function tone(at, opts) {
     const osc = ctx.createOscillator();
     osc.type = opts.type || 'sine';
@@ -142,20 +142,19 @@
   // ---------- 具体音效 ----------
 
   /**
-   * 发一张牌：牌面擦过桌布再落下。
-   * 关键是频率要低 —— 纸牌摩擦是低频的「呼」，不是高频的「呲」。
-   * 用低通而不是带通，避免在齿音区留下一个尖峰。
+   * 发一张牌：牌面擦过桌布的一声轻响。
+   * 用低通而不是带通，避免在齿音区留下尖峰；但截止频率不能压太低，
+   * 否则就成了闷闷的「咚」。之前还叠了一记 200Hz 的落桌声，
+   * 那正是「像敲门」的元凶，已经去掉。
    */
   function card(delay) {
     if (!ready()) return;
     const at = now() + (delay || 0);
     // 擦过桌面
     burst(at, {
-      type: 'lowpass', freq: 700 + Math.random() * 180, q: 0.4,
-      peak: 0.58, decay: 0.13, attack: 0.014, rate: 0.55 + Math.random() * 0.15,
+      type: 'lowpass', freq: 1500 + Math.random() * 350, q: 0.4,
+      peak: 0.34, decay: 0.085, attack: 0.006, rate: 0.9 + Math.random() * 0.25,
     });
-    // 落下时的轻拍
-    tone(at + 0.055, { type: 'sine', from: 210, to: 95, peak: 0.16, decay: 0.07 });
   }
 
   /** 一叠牌依次发出去，用于每手开局 */
@@ -167,7 +166,7 @@
 
   /**
    * 筹码推进底池。weight 0~1，越大扔得越多、越响。
-   * 每颗筹码 = 一个低频短音 + 一点低通噪声，叠在一起就是「哒哒哒」。
+   * 每颗筹码 = 一个短音 + 一点低通噪声，叠在一起就是「嗒嗒嗒」。
    */
   function chips(weight) {
     if (!ready()) return;
@@ -177,28 +176,30 @@
 
     for (let i = 0; i < count; i++) {
       const at = base + i * (0.016 + Math.random() * 0.024);
-      // 黏土筹码是「哒」不是「叮」：基频低、衰减快、几乎没有余韵
+      // 筹码是清脆短促的「嗒」：基频不低、衰减极快、没有余韵
       tone(at, {
         type: 'sine',
-        from: 420 + Math.random() * 260,
-        to: 170 + Math.random() * 70,
-        peak: 0.16 + w * 0.1,
-        decay: 0.045 + Math.random() * 0.02,
+        from: 900 + Math.random() * 400,
+        to: 430 + Math.random() * 120,
+        peak: 0.1 + w * 0.06,
+        decay: 0.03 + Math.random() * 0.015,
       });
       // 一点点低通噪声做碰撞的颗粒感，别让它变成纯音
       burst(at, {
-        type: 'lowpass', freq: 820, q: 0.4,
-        peak: 0.13 + w * 0.07, decay: 0.028, attack: 0.002, rate: 0.9,
+        type: 'lowpass', freq: 1900, q: 0.4,
+        peak: 0.08 + w * 0.05, decay: 0.018, attack: 0.001, rate: 1.1,
       });
     }
   }
 
-  /** 过牌：指节敲桌面的闷响 */
+  /** 过牌：指节敲桌面，要短要轻，不然真成砸门了 */
   function knock() {
     if (!ready()) return;
     const at = now();
-    tone(at, { type: 'sine', from: 180, to: 70, peak: 0.3, decay: 0.13 });
-    burst(at, { type: 'lowpass', freq: 700, q: 0.6, peak: 0.13, decay: 0.06, rate: 0.7 });
+    // 指节声的主体是那一下瞬态，不是低频余韵。
+    // 之前正弦占了绝大部分能量，听起来就成了砸门。
+    tone(at, { type: 'sine', from: 320, to: 170, peak: 0.075, decay: 0.05 });
+    burst(at, { type: 'lowpass', freq: 2100, q: 0.5, peak: 0.2, decay: 0.028, rate: 1.2 });
   }
 
   /** 弃牌：把两张牌推出去的轻擦声，比发牌更钝更长 */
@@ -206,12 +207,12 @@
     if (!ready()) return;
     const at = now();
     burst(at, {
-      type: 'lowpass', freq: 620, q: 0.4,
-      peak: 0.34, decay: 0.22, attack: 0.02, rate: 0.45,
+      type: 'lowpass', freq: 1250, q: 0.4,
+      peak: 0.26, decay: 0.17, attack: 0.012, rate: 0.7,
     });
     burst(at + 0.06, {
-      type: 'lowpass', freq: 520, q: 0.4,
-      peak: 0.24, decay: 0.18, attack: 0.02, rate: 0.4,
+      type: 'lowpass', freq: 1050, q: 0.4,
+      peak: 0.18, decay: 0.14, attack: 0.012, rate: 0.65,
     });
   }
 
@@ -223,16 +224,16 @@
       const at = base + i * (0.024 + Math.random() * 0.032);
       tone(at, {
         type: 'sine',
-        from: 380 + Math.random() * 280,
-        to: 150 + Math.random() * 80,
-        peak: 0.12,
-        decay: 0.05 + Math.random() * 0.03,
+        from: 820 + Math.random() * 420,
+        to: 400 + Math.random() * 140,
+        peak: 0.075,
+        decay: 0.032 + Math.random() * 0.018,
       });
     }
     // 筹码被推过桌布的底噪
     burst(base, {
-      type: 'lowpass', freq: 700, q: 0.4,
-      peak: 0.18, decay: 0.45, attack: 0.03, rate: 0.5,
+      type: 'lowpass', freq: 1400, q: 0.4,
+      peak: 0.12, decay: 0.38, attack: 0.02, rate: 0.8,
     });
   }
 
@@ -241,10 +242,10 @@
     if (!ready()) return;
     const at = now();
     burst(at, {
-      type: 'lowpass', freq: 880 + Math.random() * 180, q: 0.5,
-      peak: 0.52, decay: 0.075, attack: 0.004, rate: 0.75,
+      type: 'lowpass', freq: 1800 + Math.random() * 300, q: 0.5,
+      peak: 0.36, decay: 0.055, attack: 0.002, rate: 1.15,
     });
-    tone(at, { type: 'sine', from: 260, to: 110, peak: 0.2, decay: 0.06 });
+    tone(at, { type: 'sine', from: 520, to: 260, peak: 0.09, decay: 0.035 });
   }
 
   // ---------- 开关 ----------

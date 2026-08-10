@@ -331,7 +331,8 @@
       const bank = chipPileEl(p.chips, {
         small: true,
         unit: (engine.startingChips || 1000) / 12,
-        maxChips: 18,   // 赢到起始筹码的一倍半才封顶，赢钱看得出来
+        maxChips: 21,   // 赢到起始筹码的一倍半才封顶，赢钱看得出来
+        perStack: 7,    // 摞得高一点，更像真实牌桌上的筹码柱
       });
       bank.classList.add('bank');
       seat.appendChild(bank);

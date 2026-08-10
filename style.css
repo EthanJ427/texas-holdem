@@ -512,28 +512,56 @@ button { font-family: inherit; cursor: pointer; }
   align-items: center;
 }
 
-/* 从低角度看过去，筹码是压扁的椭圆 */
+/*
+ * 一颗筹码。真实筹码从低角度看是压扁的椭圆，边缘有一圈白色条纹，
+ * 中间是纯色的牌面 —— 条纹用 repeating-conic-gradient 画，
+ * 牌面用一层 radial-gradient 盖在中心。
+ *
+ * 厚度靠 box-shadow 往下堆几层同色描边做出侧壁，
+ * 再配合负 margin 叠放，就有了一摞筹码的层次。
+ */
 .chip {
-  width: 20px;
-  height: 7px;
+  --chip-face: #d9483a;
+  --chip-edge: #8e2418;
+  width: 26px;
+  height: 9px;
   border-radius: 50%;
-  margin-top: -4px;
-  border: 1px solid rgba(0, 0, 0, .5);
+  margin-top: -5px;
+  background:
+    radial-gradient(ellipse at 50% 50%,
+      var(--chip-face) 0 46%,
+      rgba(0, 0, 0, .18) 46% 50%,
+      transparent 50%),
+    repeating-conic-gradient(from 10deg,
+      var(--chip-face) 0 20deg,
+      #f2ede2 20deg 32deg);
   box-shadow:
-    0 1px 0 rgba(0, 0, 0, .3),
-    inset 0 1px 1px rgba(255, 255, 255, .45),
-    inset 0 -1px 1px rgba(0, 0, 0, .3);
+    /* 侧壁：三层同色描边堆出厚度 */
+    0 1px 0 var(--chip-edge),
+    0 2px 0 var(--chip-edge),
+    0 3px 0 color-mix(in srgb, var(--chip-edge) 70%, #000),
+    /* 落在桌面上的接触阴影 */
+    0 5px 5px -2px rgba(0, 0, 0, .6);
 }
 
-.chip-pile.small .chip { width: 13px; height: 5px; margin-top: -3px; border-width: .5px; }
-.chip-pile.small { gap: 2px; }
+.chip-pile.small .chip {
+  width: 21px;
+  height: 7px;
+  /* 负 margin 比高度小得越多，每颗露出的侧壁就越多，摞起来越高 */
+  margin-top: -3.5px;
+  box-shadow:
+    0 1px 0 var(--chip-edge),
+    0 2px 0 color-mix(in srgb, var(--chip-edge) 70%, #000),
+    0 4px 5px -2px rgba(0, 0, 0, .65);
+}
+.chip-pile.small { gap: 3px; }
 
-.chip.c1    { background: linear-gradient(180deg, #fbfaf7, #d8d2c6); }
-.chip.c5    { background: linear-gradient(180deg, #d9483a, #a5291d); }
-.chip.c25   { background: linear-gradient(180deg, #3fa06a, #24704a); }
-.chip.c100  { background: linear-gradient(180deg, #3b4148, #1c2025); }
-.chip.c500  { background: linear-gradient(180deg, #8663c4, #543a86); }
-.chip.c1000 { background: linear-gradient(180deg, #e6b93f, #a97f16); }
+.chip.c1    { --chip-face: #eae4d6; --chip-edge: #9c957f; }
+.chip.c5    { --chip-face: #d9483a; --chip-edge: #8e2418; }
+.chip.c25   { --chip-face: #2f9d63; --chip-edge: #175f38; }
+.chip.c100  { --chip-face: #32383f; --chip-edge: #14181c; }
+.chip.c500  { --chip-face: #7f5cbe; --chip-edge: #462f74; }
+.chip.c1000 { --chip-face: #e0ae2f; --chip-edge: #8f6a0d; }
 
 /* 座位自己的家底，摆在名牌下面 */
 .chip-pile.bank {
