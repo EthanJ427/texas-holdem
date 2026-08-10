@@ -20,6 +20,10 @@
 
   class HoldemEngine {
     constructor(config) {
+      // 洗牌用的随机源。单机用 Math.random 足够；服务器必须传入
+      // crypto 级别的发生器 —— Math.random 是可预测的，联机时等于把牌堆泄了。
+      this.rng = config.rng || Math.random;
+
       this.smallBlind = config.smallBlind || 10;
       this.bigBlind = config.bigBlind || 20;
       this.startingChips = config.startingChips || 1000;
@@ -165,7 +169,7 @@
       // 移动庄家按钮到下一个还在场的人
       this.buttonIndex = this.nextSeated(this.buttonIndex);
 
-      this.deck = Cards.shuffle(Cards.makeDeck());
+      this.deck = Cards.shuffle(Cards.makeDeck(), this.rng);
       this.emit('hand-start', {
         handNumber: this.handNumber,
         button: this.buttonIndex,
