@@ -565,6 +565,106 @@
       return out;
     }
 
+    // ---------- 按人裁剪的视图 ----------
+
+    /** 这张底牌，viewerId 看得到吗？ */
+    canSeeHole(player, viewerId) {
+      if (player.hole.length === 0) return false;
+      if (player.id === viewerId) return true;          // 自己的牌永远看得见
+      // 摊牌时亮出来的只有还在牌里的人；中途弃牌的人的牌不该被翻出来
+      const showdown = this.handOver && this.result && this.result.showdown;
+      return !!showdown && !player.folded;
+    }
+
+    /**
+     * 生成只属于某个玩家的状态快照。别人的底牌一律是 null。
+     *
+     * 这是状态离开引擎的唯一出口 —— 联机时服务器绝不能直接序列化引擎本身，
+     * 因为引擎手里有整副牌和所有人的底牌。凡是要发给客户端（或交给 AI）的，
+     * 都必须先过这里。viewerId 传 null 表示旁观者视角。
+     */
+    viewFor(viewerId) {
+      const me = typeof viewerId === 'number' ? this.players[viewerId] : null;
+
+      const players = this.players.map((p) => ({
+        id: p.id,
+        name: p.name,
+        isHuman: p.isHuman,
+        level: p.level,
+        chips: p.chips,
+        bet: p.bet,
+        committed: p.committed,
+        folded: p.folded,
+        allIn: p.allIn,
+        busted: p.busted,
+        lastAction: p.lastAction,
+        wonThisHand: p.wonThisHand,
+        holeCount: p.hole.length,                       // 手里有几张牌是公开信息
+        hole: this.canSeeHole(p, viewerId) ? p.hole.slice() : null,
+      }));
+
+      return {
+        you: me ? me.id : null,
+        handNumber: this.handNumber,
+        street: this.street,
+        board: this.board.slice(),
+        pot: this.pot,
+        currentBet: this.currentBet,
+        minRaise: this.minRaise,
+        smallBlind: this.smallBlind,
+        bigBlind: this.bigBlind,
+        startingChips: this.startingChips,
+        buttonIndex: this.buttonIndex,
+        sbIndex: this.sbIndex,
+        bbIndex: this.bbIndex,
+        actorIndex: this.actorIndex,
+        handOver: this.handOver,
+        players,
+        // 只有轮到自己时才给出可选动作和需要跟注的金额
+        toCall: me && this.actorIndex === me.id ? this.toCall(me) : 0,
+        legalActions: me && this.actorIndex === me.id && !this.handOver
+          ? this.legalActions(me)
+          : [],
+        result: this.resultView(),
+      };
+    }
+
+    /** 结算信息也要裁剪：只有摊牌才公开牌型，弃牌收池不亮牌。 */
+    resultView() {
+      if (!this.result) return null;
+      return {
+        showdown: this.result.showdown,
+        pots: this.result.pots.map((pot) => ({
+          amount: pot.amount,
+          winners: pot.winners.slice(),
+          label: pot.label,
+        })),
+        // hands 里只有摊牌时还在牌局中的人，这些牌本来就该亮出来
+        hands: this.result.hands.map((h) => ({
+          player: h.player,
+          description: h.description,
+          best: h.best.slice(),
+        })),
+      };
+    }
+
+    /** 视图里允许出现的字段名。新增字段必须先登记在这里，否则测试会失败。 */
+    static get VIEW_KEYS() {
+      return [
+        'you', 'handNumber', 'street', 'board', 'pot', 'currentBet', 'minRaise',
+        'smallBlind', 'bigBlind', 'startingChips', 'buttonIndex', 'sbIndex',
+        'bbIndex', 'actorIndex', 'handOver', 'players', 'toCall', 'legalActions',
+        'result',
+        // players[] 里的
+        'id', 'name', 'isHuman', 'level', 'chips', 'bet', 'committed', 'folded',
+        'allIn', 'busted', 'lastAction', 'wonThisHand', 'holeCount', 'hole',
+        // legalActions[] 里的
+        'type', 'label', 'amount', 'min', 'max',
+        // result 里的
+        'showdown', 'pots', 'winners', 'hands', 'player', 'description', 'best',
+      ];
+    }
+
     emit(type, payload) {
       this.events.push({ type, ...payload });
     }

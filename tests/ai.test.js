@@ -105,7 +105,7 @@
           const actor = g.currentActor();
           if (!actor) break;
           const legal = g.legalActions();
-          const move = AI.decide(g, actor);
+          const move = AI.decide(g.viewFor(actor.id));
           decisions++;
 
           const entry = legal.find((a) => a.type === move.type);
@@ -160,7 +160,7 @@
           while (!g.handOver && guard++ < 200) {
             const actor = g.currentActor();
             if (!actor) break;
-            const move = AI.decide(g, actor);
+            const move = AI.decide(g.viewFor(actor.id));
             g.act(move.type, move.amount);
           }
           net += g.players[0].chips - STACK;
@@ -200,7 +200,7 @@
         g.startHand();
         const actor = g.currentActor();
         actor.hole = marginal.slice();
-        const move = AI.decide(g, actor);
+        const move = AI.decide(g.viewFor(actor.id));
         if (move.type !== 'fold') entered++;
       }
       counts[level] = entered / trials;

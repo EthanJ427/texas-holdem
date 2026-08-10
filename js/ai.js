@@ -109,23 +109,23 @@
    * 位置判断：看自己之后还有多少人要行动。人越多位置越差。
    * 关键是只数「我到按钮之间」的人——按钮永远最后说话。
    */
-  function positionOf(engine, player) {
-    if (engine.street === 'preflop'
-        && (player.id === engine.sbIndex || player.id === engine.bbIndex)) {
+  function positionOf(view, player) {
+    if (view.street === 'preflop'
+        && (player.id === view.sbIndex || player.id === view.bbIndex)) {
       return 'blind';
     }
 
-    const live = engine.livePlayers();
+    const live = livePlayers(view);
     if (live.length <= 3) return 'late';
 
     let after = 0;
-    if (player.id !== engine.buttonIndex) {
-      const n = engine.players.length;
+    if (player.id !== view.buttonIndex) {
+      const n = view.players.length;
       for (let step = 1; step < n; step++) {
         const idx = (player.id + step) % n;
-        const p = engine.players[idx];
+        const p = view.players[idx];
         if (!p.busted && !p.folded && !p.allIn) after++;
-        if (idx === engine.buttonIndex) break;   // 按钮之后就轮不到别人了
+        if (idx === view.buttonIndex) break;   // 按钮之后就轮不到别人了
       }
     }
 
@@ -195,8 +195,8 @@
    * 人越少，起手牌范围就该越宽：六人桌等得起好牌，单挑还挑三拣四就会被盲注磨死。
    * 返回值直接从各种门槛上减掉。
    */
-  function loosenBy(engine) {
-    const n = engine.livePlayers().length;
+  function loosenBy(view) {
+    const n = livePlayers(view).length;
     if (n <= 2) return 4;
     if (n === 3) return 2.5;
     if (n <= 5) return 1;
@@ -205,36 +205,50 @@
 
   // ---------- 决策 ----------
 
-  function decide(engine, player) {
+  /** 视图里还在牌局中的人 */
+  function livePlayers(view) {
+    return view.players.filter((p) => !p.busted && !p.folded);
+  }
+
+  /**
+   * 决定下一步怎么打。
+   *
+   * 入参是 engine.viewFor(自己的id) 产出的裁剪视图，不是引擎本身 ——
+   * 这样「AI 看不到别人的底牌」就不再是我写代码时的自觉，
+   * 而是它压根拿不到：视图里别人的 hole 一律是 null。
+   * 联机时服务器上的 AI 和真人客户端消费的是同一份东西。
+   */
+  function decide(view) {
+    const player = view.players[view.you];
     const level = LEVELS[player.level] || LEVELS.intermediate;
-    const legal = engine.legalActions(player);
-    const toCall = engine.toCall(player);
-    const pot = engine.pot;
+    const legal = view.legalActions;
+    const toCall = view.toCall;
+    const pot = view.pot;
 
     const has = (type) => legal.find((a) => a.type === type);
     const raiseOption = has('raise') || has('bet');
 
-    const decision = engine.street === 'preflop'
-      ? preflop(engine, player, level, { legal, toCall, pot, raiseOption })
-      : postflop(engine, player, level, { legal, toCall, pot, raiseOption });
+    const decision = view.street === 'preflop'
+      ? preflop(view, player, level, { legal, toCall, pot, raiseOption })
+      : postflop(view, player, level, { legal, toCall, pot, raiseOption });
 
     return sanitize(decision, legal);
   }
 
-  function preflop(engine, player, level, ctx) {
+  function preflop(view, player, level, ctx) {
     const { toCall, pot, raiseOption } = ctx;
     const score = chenScore(player.hole);
-    const position = positionOf(engine, player);
-    const facingRaise = engine.currentBet > engine.bigBlind;
+    const position = positionOf(view, player);
+    const facingRaise = view.currentBet > view.bigBlind;
     const jitter = (Math.random() - 0.5) * 2 * level.noise * 10;
     const effective = score + jitter;
-    const loosen = loosenBy(engine);
+    const loosen = loosenBy(view);
 
     // 没人加注：够门槛就开池，否则能过牌就过牌
     if (!facingRaise) {
       const threshold = level.openThreshold[position] - loosen;
       if (effective >= threshold && raiseOption && Math.random() < 0.55 + level.aggression * 0.4) {
-        const open = engine.bigBlind * (position === 'late' ? 2.5 : 3);
+        const open = view.bigBlind * (position === 'late' ? 2.5 : 3);
         return { type: raiseOption.type, amount: open + pot * 0.1 };
       }
       if (toCall === 0) return { type: 'check' };
@@ -247,7 +261,7 @@
 
     // 面对加注
     if (effective >= level.threeBet - loosen && raiseOption && Math.random() < level.aggression) {
-      return { type: raiseOption.type, amount: engine.currentBet * 3 };
+      return { type: raiseOption.type, amount: view.currentBet * 3 };
     }
     if (effective >= level.callRaise - loosen) return { type: 'call' };
 
@@ -263,11 +277,11 @@
     return { type: 'fold' };
   }
 
-  function postflop(engine, player, level, ctx) {
+  function postflop(view, player, level, ctx) {
     const { toCall, pot, raiseOption } = ctx;
-    const opponents = engine.livePlayers().length - 1;
+    const opponents = livePlayers(view).length - 1;
 
-    let equity = estimateEquity(player.hole, engine.board, opponents, level.iterations);
+    let equity = estimateEquity(player.hole, view.board, opponents, level.iterations);
     equity += (Math.random() - 0.5) * 2 * level.noise;
     equity = Math.max(0, Math.min(1, equity));
 
@@ -279,7 +293,7 @@
       const valueBet = equity > 0.62 && Math.random() < 0.35 + level.aggression * 0.6;
       const bluff = equity < 0.32 && Math.random() < level.bluffRate;
       if ((valueBet || bluff) && raiseOption) {
-        return { type: raiseOption.type, amount: engine.currentBet + Math.max(engine.bigBlind, pot * sizing) };
+        return { type: raiseOption.type, amount: view.currentBet + Math.max(view.bigBlind, pot * sizing) };
       }
       return { type: 'check' };
     }
@@ -288,13 +302,13 @@
     const edge = equity - potOdds;
 
     if (edge > 0.22 && raiseOption && Math.random() < level.aggression) {
-      return { type: raiseOption.type, amount: engine.currentBet + Math.max(engine.bigBlind, pot * sizing) };
+      return { type: raiseOption.type, amount: view.currentBet + Math.max(view.bigBlind, pot * sizing) };
     }
     if (edge > level.callMargin) return { type: 'call' };
 
     // 偶尔把差牌打成诈唬加注
     if (raiseOption && equity < 0.3 && Math.random() < level.bluffRate * 0.4) {
-      return { type: raiseOption.type, amount: engine.currentBet + Math.max(engine.bigBlind, pot * sizing) };
+      return { type: raiseOption.type, amount: view.currentBet + Math.max(view.bigBlind, pot * sizing) };
     }
 
     return { type: 'fold' };

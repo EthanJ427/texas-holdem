@@ -584,7 +584,8 @@
         render();
         // 决策本身很快，这里的停顿纯粹是为了让牌桌有节奏感
         await sleep(420 + Math.random() * 520);
-        move = AI.decide(engine, actor);
+        // 交给 AI 的是裁剪过的视图，它拿不到别人的底牌
+        move = AI.decide(engine.viewFor(actor.id));
         thinkingId = -1;
       }
 
