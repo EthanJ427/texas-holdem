@@ -1,0 +1,15 @@
+{
+  "name": "texas-holdem",
+  "version": "1.0.0",
+  "private": true,
+  "description": "浏览器德州扑克。单机部分不需要任何依赖，这里的依赖只用于联机服务器的部署。",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "whoami": "wrangler whoami",
+    "login": "wrangler login"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

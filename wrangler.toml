@@ -1,0 +1,17 @@
+name = "holdem"
+main = "worker/index.js"
+compatibility_date = "2026-08-01"
+
+# 一张桌子一个 Durable Object。DO 单线程，天然不会有并发竞态。
+[[durable_objects.bindings]]
+name = "TABLE"
+class_name = "TableDO"
+
+# new_sqlite_classes 是免费额度覆盖的那种 DO
+# （对比 new_classes，那种要付费计划）
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TableDO"]
+
+[observability]
+enabled = true
