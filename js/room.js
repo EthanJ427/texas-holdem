@@ -45,6 +45,8 @@
       this.nextHandAt = null;     // 下一手什么时候开
       this.outbox = [];
       this.handNumber = 0;
+      // 牌局进行中来的人先排队，下一手开始时才真正入座
+      this.pending = [];
 
       if (this.config.fillWithBots) this.fillBots();
     }
@@ -176,8 +178,42 @@
       const d = msg.d || {};
       let seat = d.token ? this.seatByToken(d.token) : null;
 
+      // 排队中的人重连
       if (!seat) {
-        // 新玩家：优先坐空位，没有空位就顶掉一个机器人
+        const waiting = this.pending.find((p) => d.token && p.token === d.token);
+        if (waiting) waiting.connId = connId;
+      }
+
+      if (!seat) {
+        // 牌局进行中绝不动座位 —— 否则新来的人会当场接手别人这一手的底牌，
+        // 既看得见也能行动，筹码记账还会错乱。先排队，下一手开始时入座。
+        if (this.engine && !this.engine.handOver) {
+          let waiting = this.pending.find((p) => p.connId === connId);
+          if (!waiting) {
+            waiting = {
+              connId,
+              name: (d.name || '玩家').slice(0, 12),
+              token: d.token || this.makeToken(),
+            };
+            this.pending.push(waiting);
+          }
+          this.send(connId, 'welcome', {
+            you: null,
+            token: waiting.token,
+            serverTime: now,
+            waiting: true,
+            config: this.publicConfig(),
+          }, msg.id);
+          // 旁观视角：谁的底牌都看不到
+          this.send(connId, 'state', {
+            view: this.engine.viewFor(null),
+            actionSeq: this.actionSeq,
+            seats: this.seatSummary(),
+          });
+          return;
+        }
+
+        // 没在牌局中：优先坐空位，没有空位就顶掉一个机器人
         let index = this.seats.findIndex((s) => !s);
         if (index < 0) index = this.seats.findIndex((s) => s && s.isBot);
         if (index < 0) {
@@ -208,13 +244,8 @@
         you: seat.seat,
         token: seat.token,
         serverTime: now,
-        config: {
-          smallBlind: this.config.smallBlind,
-          bigBlind: this.config.bigBlind,
-          startingChips: this.config.startingChips,
-          turnSeconds: this.config.turnSeconds,
-          fillWithBots: this.config.fillWithBots,
-        },
+        waiting: false,
+        config: this.publicConfig(),
       }, msg.id);
 
       if (this.engine) {
@@ -369,6 +400,7 @@
           this.seats[i] = null;
         }
       }
+      this.seatPending();
       if (this.config.fillWithBots) this.fillBots();
 
       const playable = this.seats.filter((s) => s && s.chips > 0);
@@ -412,6 +444,46 @@
       this.pushState();
       this.scheduleActor(now);
       this.pushTurn();
+    }
+
+    publicConfig() {
+      return {
+        smallBlind: this.config.smallBlind,
+        bigBlind: this.config.bigBlind,
+        startingChips: this.config.startingChips,
+        turnSeconds: this.config.turnSeconds,
+        fillWithBots: this.config.fillWithBots,
+      };
+    }
+
+    /** 把等候队列里的人安置到座位上。只在一手牌开始前调用。 */
+    seatPending() {
+      while (this.pending.length) {
+        let index = this.seats.findIndex((s) => !s);
+        if (index < 0) index = this.seats.findIndex((s) => s && s.isBot);
+        if (index < 0) break;                       // 满了，继续等
+        const waiting = this.pending.shift();
+        this.seats[index] = {
+          seat: index,
+          name: waiting.name,
+          isBot: false,
+          level: null,
+          chips: this.config.startingChips,
+          connected: true,
+          token: waiting.token,
+          connId: waiting.connId,
+          missedHands: 0,
+          leaveAfterHand: false,
+        };
+        // 告诉他坐到了几号位
+        this.send(waiting.connId, 'welcome', {
+          you: index,
+          token: waiting.token,
+          serverTime: Date.now(),
+          waiting: false,
+          config: this.publicConfig(),
+        });
+      }
     }
 
     endHand(now) {

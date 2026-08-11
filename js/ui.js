@@ -484,6 +484,7 @@
     container.innerHTML = '';
     $('raise-panel').classList.add('hidden');
 
+    if (view.you === null || view.you === undefined) return;
     const me = view.players[view.you];
     const legal = view.legalActions;
     const toCall = view.toCall;
@@ -750,7 +751,10 @@
       name: playerName,
       on: {
         status: onNetStatus,
-        welcome: () => { appendLog(`已进入房间 ${roomCode}`, 'log-hand'); },
+        welcome: (d) => {
+          if (d.waiting) appendLog('牌局进行中，你排在下一手入座', 'log-street');
+          else appendLog(`已入座 ${roomCode} 房间`, 'log-hand');
+        },
         state: onNetState,
         events: onNetEvents,
         turn: onNetTurn,
@@ -774,6 +778,9 @@
   function onNetState(d) {
     const previous = view;
     view = d.view;
+    // you 为 null = 还在等下一手入座，此时是旁观视角
+    const waiting = view.you === null || view.you === undefined;
+    $('action-prompt').textContent = waiting ? '牌局进行中，下一手开始时你就入座' : '';
     // 换手了就把动画状态清空，否则上一手的牌会被当成"已经出现过"
     if (!previous || previous.handNumber !== view.handNumber) {
       displayBoard = [];
@@ -786,7 +793,8 @@
     syncBoard().then(render);
     render();
     // 不该我行动了就把按钮收掉
-    if (view.actorIndex !== view.you || view.handOver) clearActionBar();
+    if (waiting || view.actorIndex !== view.you || view.handOver) clearActionBar();
+    if (waiting) $('action-prompt').textContent = '牌局进行中，下一手开始时你就入座';
   }
 
   function onNetEvents(events) {
@@ -857,10 +865,12 @@
         ? `${pot.label} ${pot.amount} → ${names}（${info ? info.description : ''}）`
         : `${names} 赢得 ${pot.amount}`;
     });
-    const me = view.players[view.you];
-    const delta = me.wonThisHand - me.committed;
-    if (delta > 0) lines.push(`你这手净赢 ${delta}`);
-    else if (delta < 0) lines.push(`你这手净输 ${-delta}`);
+    const me = view.you === null || view.you === undefined ? null : view.players[view.you];
+    if (me) {
+      const delta = me.wonThisHand - me.committed;
+      if (delta > 0) lines.push(`你这手净赢 ${delta}`);
+      else if (delta < 0) lines.push(`你这手净输 ${-delta}`);
+    }
     $('result-text').innerHTML = lines.join('<br>');
     $('result-banner').classList.remove('hidden');
     $('next-hand-btn').textContent = '等待下一手…';

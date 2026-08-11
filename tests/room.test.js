@@ -70,6 +70,46 @@
     eq(after.length, 6, '六个座位都有人');
   });
 
+  suite('牌局进行中加入的人要等下一手', () => {
+    // 之前是一进来就顶掉某个机器人，于是这个人当场接手了别人这一手的底牌，
+    // 既能看见也能行动，筹码记账也会错乱。协议里写的是"绝不在牌局中途动座位"。
+    const room = makeRoom();
+    room.handle('c1', { t: 'join', id: 1, d: { name: '先到的' } }, 0);
+    const now = runUntil(room, 0, (r) => r.engine && !r.engine.handOver, 50);
+    ok(room.engine && !room.engine.handOver, '牌局正在进行中');
+    const handNow = room.engine.handNumber;
+
+    const out = room.handle('c2', { t: 'join', id: 2, d: { name: '后到的' } }, now);
+    const w = firstOf(out, 'welcome');
+    ok(w !== null, '中途进来的人也能连上');
+    eq(w.d.you, null, '但还没有座位号，得等下一手');
+
+    const st = firstOf(out, 'state');
+    ok(st !== null, '给了他一份旁观视角的状态');
+    const seen = st.d.view.players.filter((p) => p.hole !== null).length;
+    eq(seen, 0, '旁观视角看不到任何人的底牌');
+
+    // 打到下一手开始
+    let t = now;
+    for (let i = 0; i < 4000; i++) {
+      room.tick(t);
+      const a = room.engine && !room.engine.handOver && room.engine.currentActor();
+      if (a && !room.seats[a.id].isBot && room.seats[a.id].connId) {
+        room.handle(room.seats[a.id].connId, {
+          t: 'action', id: 500 + i,
+          d: { handNumber: room.engine.handNumber, actionSeq: room.actionSeq, type: 'fold' },
+        }, t);
+      }
+      if (room.engine && room.engine.handNumber > handNow) break;
+      t += 50;
+    }
+
+    const latecomer = room.seats.find((s) => s && s.name === '后到的');
+    ok(latecomer, '下一手开始时他入座了');
+    eq(latecomer.isBot, false, '入座的是真人不是机器人');
+    eq(room.humanSeats().length, 2, '桌上现在有两个真人');
+  });
+
   suite('凭据重连：拿回原座位和筹码', () => {
     const room = makeRoom();
     const w = firstOf(room.handle('c1', { t: 'join', id: 1, d: { name: '老王' } }, 1000), 'welcome');
