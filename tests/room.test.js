@@ -51,6 +51,25 @@
     eq(room.seats.filter((s) => s && s.isBot).length, 5, '其余五个位置由机器人补齐');
   });
 
+  suite('机器人名字不会重复', () => {
+    // 真人顶掉中间某个机器人后，如果按「现有机器人数量」取名字，
+    // 会和还留在桌上的名字撞上 —— 实际打的时候桌上出现了两个「高博」。
+    const room = makeRoom();
+    const names = () => room.seats.filter(Boolean).map((s) => s.name);
+
+    eq(new Set(names()).size, names().length, '开局六个名字互不相同');
+
+    // 三个真人陆续进来，每次都会顶掉一个机器人并重新补位
+    room.handle('c1', { t: 'join', id: 1, d: { name: 'A' } }, 0);
+    room.handle('c2', { t: 'join', id: 2, d: { name: 'B' } }, 0);
+    room.handle('c3', { t: 'join', id: 3, d: { name: 'C' } }, 0);
+    room.startHand(0);
+
+    const after = names();
+    eq(new Set(after).size, after.length, `进人补位后仍然互不相同：${after.join('、')}`);
+    eq(after.length, 6, '六个座位都有人');
+  });
+
   suite('凭据重连：拿回原座位和筹码', () => {
     const room = makeRoom();
     const w = firstOf(room.handle('c1', { t: 'join', id: 1, d: { name: '老王' } }, 1000), 'welcome');

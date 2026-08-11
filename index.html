@@ -12,8 +12,30 @@
   <div id="setup" class="screen">
     <div class="setup-card">
       <h1>德州扑克</h1>
-      <p class="tagline">六人桌 · 无限注 · 你 vs 五个电脑对手</p>
+      <p class="tagline">六人桌 · 无限注</p>
 
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="mode-solo">单机</button>
+        <button class="mode-tab" id="mode-online">和朋友联机</button>
+      </div>
+
+      <!-- 联机：房间号 + 昵称 -->
+      <div id="online-fields" class="hidden">
+        <label class="field">
+          <span class="field-label">你的名字</span>
+          <input type="text" id="player-name" maxlength="12" placeholder="老王">
+        </label>
+        <label class="field">
+          <span class="field-label">房间号（和朋友输一样的就进同一桌）</span>
+          <input type="text" id="room-code" maxlength="8" placeholder="比如 8888" autocapitalize="characters">
+        </label>
+        <button id="join-btn" class="primary-btn">进入房间</button>
+        <div class="setup-note">
+          空位由电脑对手补齐，两个人也能开打。每个决定 60 秒，超时自动过牌或弃牌。
+        </div>
+      </div>
+
+      <div id="solo-fields">
       <label class="field">
         <span class="field-label">对手强度</span>
         <select id="difficulty">
@@ -43,6 +65,7 @@
       </label>
 
       <button id="start-btn" class="primary-btn">坐下开打</button>
+      </div>
 
       <div class="setup-note">
         电脑对手只看得见自己的底牌和公共牌，和你掌握的信息完全一样，不会偷看。
@@ -57,6 +80,8 @@
       <div class="topbar-left">
         <span class="hand-counter">第 <b id="hand-number">0</b> 手</span>
         <span class="blind-info" id="blind-info"></span>
+        <span class="room-info hidden" id="room-info"></span>
+        <span class="conn-info hidden" id="conn-info"></span>
       </div>
       <div class="topbar-right">
         <button id="sound-toggle" class="ghost-btn" title="声音开关">🔊 声音</button>
@@ -82,6 +107,7 @@
     <div class="actionbar" id="actionbar">
       <div class="action-info">
         <span id="action-prompt">等待发牌…</span>
+        <span class="countdown hidden" id="countdown"></span>
       </div>
       <div class="action-buttons" id="action-buttons"></div>
       <div class="raise-panel hidden" id="raise-panel">
@@ -125,6 +151,7 @@
   <script src="js/engine.js"></script>
   <script src="js/ai.js"></script>
   <script src="js/sound.js"></script>
+  <script src="js/net.js"></script>
   <script src="js/ui.js"></script>
 </body>
 </html>

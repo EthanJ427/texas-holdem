@@ -814,3 +814,67 @@ button { font-family: inherit; cursor: pointer; }
   :root { --card-w: 32px; --card-h: 46px; }
   .seat { width: 88px; }
 }
+
+/* ---------- 单机 / 联机 切换 ---------- */
+
+.mode-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  background: #101815;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid #2b3833;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 9px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background .15s, color .15s;
+}
+.mode-tab:hover { color: var(--ink); }
+.mode-tab.active { background: #24322b; color: var(--gold); }
+
+.field input[type="text"] {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid #33413b;
+  background: #101815;
+  color: var(--ink);
+  font-size: 14px;
+  font-family: inherit;
+}
+.field input[type="text"]:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+#room-code { letter-spacing: 3px; font-weight: 700; }
+
+/* ---------- 联机时的顶栏信息 ---------- */
+
+.room-info {
+  margin-left: 14px;
+  color: var(--gold);
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.conn-info { margin-left: 12px; }
+.conn-info.bad { color: var(--danger); }
+
+/* ---------- 倒计时 ---------- */
+
+.countdown {
+  margin-left: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}
+.countdown.urgent { color: var(--danger); }

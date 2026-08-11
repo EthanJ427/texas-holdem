@@ -54,10 +54,15 @@
     fillBots() {
       for (let i = 0; i < SEATS; i++) {
         if (this.seats[i]) continue;
-        const botIndex = this.seats.filter((s) => s && s.isBot).length;
+        // 取一个当前没人用的名字。
+        // 不能按「现有机器人数量」当索引：真人顶掉中间某个机器人后，
+        // 数量会和还留在桌上的某个名字撞上，于是出现两个「高博」。
+        const used = new Set(this.seats.filter(Boolean).map((s) => s.name));
+        const name = BOT_NAMES.find((n) => !used.has(n)) || `电脑${i}`;
+        const botIndex = Math.max(0, BOT_NAMES.indexOf(name));
         this.seats[i] = {
           seat: i,
-          name: BOT_NAMES[botIndex % BOT_NAMES.length],
+          name,
           isBot: true,
           level: this.config.botLevels[botIndex % this.config.botLevels.length],
           chips: this.config.startingChips,

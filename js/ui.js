@@ -110,7 +110,11 @@
     return pile;
   }
 
-  let engine = null;
+  let engine = null;      // 单机模式下的本地引擎；联机时为 null
+  let net = null;         // 联机客户端；单机时为 null
+  let view = null;        // 渲染唯一依据。单机来自 engine.viewFor(0)，联机来自服务器
+  let turnInfo = null;    // 联机时服务器给的本回合信息（含截止时刻）
+  let countdownTimer = null;
   let displayBoard = [];
   let revealAll = false;
   let highlightCards = new Set();
@@ -123,10 +127,26 @@
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  const isOnline = () => net !== null;
+
+  /**
+   * 把座位号换算成屏幕上的位置：自己永远在正下方。
+   * 单机时 you 恒为 0，等于没变；联机时每个人看到的都是「我在下面」。
+   */
+  function displaySeat(seatId) {
+    const me = view && typeof view.you === 'number' ? view.you : 0;
+    return ((seatId - me) % 6 + 6) % 6;
+  }
+
+  /** 单机模式下把引擎状态同步成视图 —— 走的是和联机完全相同的裁剪函数 */
+  function syncLocalView() {
+    if (engine) view = engine.viewFor(0);
+  }
+
   // ---------- 存档 ----------
 
   function save() {
-    if (!engine) return;
+    if (!engine || isOnline()) return;
     // 中途退出时这一手作废，已经推进底池的筹码要退回来，否则存档一读就少了一截。
     // 一手打完后 committed 仍保留着本手的投入，但赢的钱已经进了 chips，这时不能再加。
     const handInProgress = !engine.handOver;
@@ -229,14 +249,14 @@
   }
 
   function render() {
-    if (!engine) return;
+    if (!view) return;
 
-    $('hand-number').textContent = engine.handNumber;
-    $('blind-info').textContent = `盲注 ${engine.smallBlind}/${engine.bigBlind}`;
-    $('pot-amount').textContent = engine.pot;
+    $('hand-number').textContent = view.handNumber;
+    $('blind-info').textContent = `盲注 ${view.smallBlind}/${view.bigBlind}`;
+    $('pot-amount').textContent = view.pot;
 
     const streetNames = { preflop: '翻牌前', flop: '翻牌', turn: '转牌', river: '河牌', showdown: '摊牌' };
-    $('street-label').textContent = streetNames[engine.street] || '';
+    $('street-label').textContent = streetNames[view.street] || '';
 
     // 公共牌
     // 公共牌复用已有节点：翻牌是一张一张发的，中间还夹着别的重渲染，
@@ -259,7 +279,7 @@
     // 座位
     const seats = $('seats');
     seats.innerHTML = '';
-    engine.players.forEach((p, i) => {
+    view.players.forEach((p, i) => {
       seats.appendChild(seatEl(p, i));
       // 宽屏时筹码摆在座位和桌心之间；竖屏桌子太窄，摆哪儿都会压到
       // 公共牌或别人的牌，所以直接挂在座位上（见 seatEl）
@@ -267,7 +287,7 @@
     });
 
     // 庄家按钮贴在庄家座位旁边
-    const btnPos = seatPositions()[engine.buttonIndex];
+    const btnPos = seatPositions()[displaySeat(view.buttonIndex)];
     const dealer = document.createElement('div');
     dealer.className = 'dealer-button';
     dealer.textContent = 'D';
@@ -277,13 +297,13 @@
   }
 
   function seatEl(p, i) {
-    const pos = seatPositions()[i];
+    const pos = seatPositions()[displaySeat(i)];
     const seat = document.createElement('div');
     seat.className = 'seat';
-    if (p.isHuman) seat.classList.add('me');
+    if (i === view.you) seat.classList.add('me');
     if (p.folded && !p.busted) seat.classList.add('folded');
     if (p.busted) seat.classList.add('folded');
-    if (engine.actorIndex === i && !engine.handOver) seat.classList.add('acting');
+    if (view.actorIndex === i && !view.handOver) seat.classList.add('acting');
     if (winnerIds.has(i)) seat.classList.add('winner');
     seat.style.left = pos.left + '%';
     seat.style.top = pos.top + '%';
@@ -306,15 +326,21 @@
     // 底牌
     const cards = document.createElement('div');
     cards.className = 'seat-cards';
-    if (!p.busted && p.hole.length === 2) {
-      const faceUp = p.isHuman || (revealAll && !p.folded);
-      p.hole.forEach((c, idx) => {
-        // key 里带上正反面，摊牌翻开时 key 会变，正好让翻牌动一下
-        const fresh = isFresh(`hole:${i}:${idx}:${faceUp ? c : 'back'}`);
-        cards.appendChild(faceUp
-          ? cardEl(c, { winning: highlightCards.has(c), dimmed: p.folded, animate: fresh })
-          : cardEl(null, { animate: fresh }));
-      });
+    // 视图里有牌就是明的，没有就是背面 —— 界面不再自己判断该不该露，
+    // 一切以裁剪结果为准。这样联机时哪怕界面写错也泄不出去。
+    if (!p.busted && p.holeCount === 2) {
+      if (p.hole) {
+        p.hole.forEach((c, idx) => {
+          const fresh = isFresh(`hole:${i}:${idx}:${c}`);
+          cards.appendChild(cardEl(c, {
+            winning: highlightCards.has(c), dimmed: p.folded, animate: fresh,
+          }));
+        });
+      } else {
+        for (let idx = 0; idx < 2; idx++) {
+          cards.appendChild(cardEl(null, { animate: isFresh(`hole:${i}:${idx}:back`) }));
+        }
+      }
     }
     seat.appendChild(cards);
 
@@ -332,7 +358,7 @@
     if (!p.busted && p.chips > 0) {
       const bank = chipPileEl(p.chips, {
         small: true,
-        unit: (engine.startingChips || 1000) / 12,
+        unit: (view.startingChips || 1000) / 12,
         maxChips: 24,   // 赢到起始筹码的两倍才封顶，赢钱看得出来
         perStack: 12,   // 又高又窄，才像真实牌桌上的筹码柱
       });
@@ -345,7 +371,7 @@
       const bet = document.createElement('div');
       bet.className = 'seat-bet inline';
       if (isFresh(`bet:${i}:${p.bet}`)) bet.classList.add('changed');
-      bet.appendChild(chipPileEl(p.bet, { small: true, unit: engine.bigBlind, maxChips: 10, perStack: 5 }));
+      bet.appendChild(chipPileEl(p.bet, { small: true, unit: view.bigBlind, maxChips: 10, perStack: 5 }));
       const label = document.createElement('span');
       label.textContent = p.bet;
       bet.appendChild(label);
@@ -353,8 +379,8 @@
     }
 
     // 摊牌时显示牌型
-    if (revealAll && engine.result && engine.result.showdown) {
-      const info = engine.result.hands.find((h) => h.player === i);
+    if (view.result && view.result.showdown) {
+      const info = view.result.hands.find((h) => h.player === i);
       if (info && !p.folded) {
         const tag = document.createElement('div');
         tag.className = 'seat-handinfo';
@@ -367,13 +393,13 @@
   }
 
   function betEl(p, i) {
-    const pos = BET_OFFSETS[i];
+    const pos = BET_OFFSETS[displaySeat(i)];
     const el = document.createElement('div');
     el.className = 'seat-bet';
     if (isFresh(`bet:${i}:${p.bet}`)) el.classList.add('changed');
     el.style.left = pos.left + '%';
     el.style.top = pos.top + '%';
-    el.appendChild(chipPileEl(p.bet, { unit: engine.bigBlind, maxChips: 16, perStack: 8 }));
+    el.appendChild(chipPileEl(p.bet, { unit: view.bigBlind, maxChips: 16, perStack: 8 }));
     const label = document.createElement('span');
     label.textContent = p.bet;
     el.appendChild(label);
@@ -403,6 +429,7 @@
   // ---------- 事件播放 ----------
 
   async function flush() {
+    syncLocalView();
     for (const e of engine.drainEvents()) {
       logEvent(e);
       playEventSound(e);
@@ -416,7 +443,7 @@
     if (!Sound) return;
     switch (e.type) {
       case 'deal-hole':
-        Sound.deal(engine.livePlayers().length);
+        Sound.deal(view ? view.players.filter((p) => !p.busted && !p.folded).length : 6);
         break;
       case 'blind':
         Sound.chips(0.15);
@@ -436,14 +463,14 @@
 
   /** 下注额相对起始筹码的分量，用来决定扔多少颗筹码 */
   function betWeight(amount) {
-    const reference = engine.startingChips || 1000;
-    return Math.min(1, (amount || engine.bigBlind) / (reference * 0.45));
+    const reference = (view && view.startingChips) || 1000;
+    return Math.min(1, (amount || (view && view.bigBlind) || 20) / (reference * 0.45));
   }
 
   /** 公共牌一张一张地翻出来，而不是整排突然出现 */
   async function syncBoard() {
-    while (displayBoard.length < engine.board.length) {
-      displayBoard.push(engine.board[displayBoard.length]);
+    while (view && displayBoard.length < view.board.length) {
+      displayBoard.push(view.board[displayBoard.length]);
       if (Sound) Sound.flip();
       render();
       await sleep(displayBoard.length <= 3 ? 140 : 400);
@@ -457,14 +484,14 @@
     container.innerHTML = '';
     $('raise-panel').classList.add('hidden');
 
-    const me = engine.players[0];
-    const legal = engine.legalActions(me);
-    const toCall = engine.toCall(me);
+    const me = view.players[view.you];
+    const legal = view.legalActions;
+    const toCall = view.toCall;
 
     // 提示当前牌型，方便新手判断
     let prompt = '轮到你了';
-    if (engine.board.length >= 3) {
-      const score = Cards.evaluate(me.hole.concat(engine.board));
+    if (view.board.length >= 3 && me.hole) {
+      const score = Cards.evaluate(me.hole.concat(view.board));
       prompt = `轮到你了 · 你现在是 ${Cards.describe(score)}`;
     }
     if (toCall > 0) prompt += ` · 需跟 ${toCall}`;
@@ -506,7 +533,7 @@
 
     slider.min = action.min;
     slider.max = action.max;
-    slider.value = Math.min(action.max, Math.max(action.min, Math.round(engine.pot * 0.6)));
+    slider.value = Math.min(action.max, Math.max(action.min, Math.round(view.pot * 0.6)));
     output.textContent = slider.value;
     slider.oninput = () => { output.textContent = slider.value; };
 
@@ -514,9 +541,9 @@
     const presets = $('raise-presets');
     presets.innerHTML = '';
     const options = [
-      { label: '½ 底池', to: engine.currentBet + engine.pot * 0.5 },
-      { label: '⅔ 底池', to: engine.currentBet + engine.pot * 0.67 },
-      { label: '1× 底池', to: engine.currentBet + engine.pot },
+      { label: '½ 底池', to: view.currentBet + view.pot * 0.5 },
+      { label: '⅔ 底池', to: view.currentBet + view.pot * 0.67 },
+      { label: '1× 底池', to: view.currentBet + view.pot },
       { label: '全下', to: action.max },
     ];
     for (const opt of options) {
@@ -537,6 +564,12 @@
   }
 
   function submit(move) {
+    if (isOnline()) {
+      // 带上手牌号和动作序号，服务器靠这两个挡住重复提交
+      net.action(view.handNumber, turnInfo ? turnInfo.actionSeq : 0, move.type, move.amount);
+      clearActionBar();
+      return;
+    }
     if (!humanResolve) return;
     const resolve = humanResolve;
     humanResolve = null;
@@ -563,9 +596,11 @@
     $('result-banner').classList.add('hidden');
 
     if (!engine.startHand()) {
+      syncLocalView();
       await flush();
       return endGame();
     }
+    syncLocalView();
 
     await flush();
     await sleep(350);
@@ -600,7 +635,7 @@
   }
 
   async function finishHand() {
-    const result = engine.result;
+    const result = view && view.result;
     if (!result) return;
 
     revealAll = true;
@@ -623,7 +658,7 @@
 
     const lines = [];
     for (const pot of result.pots) {
-      const names = pot.winners.map((id) => engine.players[id].name).join('、');
+      const names = pot.winners.map((id) => view.players[id].name).join('、');
       if (result.showdown) {
         const info = result.hands.find((h) => h.player === pot.winners[0]);
         lines.push(`${pot.label} ${pot.amount} → ${names}（${info ? info.description : ''}）`);
@@ -632,10 +667,10 @@
       }
     }
 
-    const me = engine.players[0];
-    const net = me.wonThisHand - me.committed;
-    if (net > 0) lines.push(`你这手净赢 ${net}`);
-    else if (net < 0) lines.push(`你这手净输 ${-net}`);
+    const me = view.players[view.you];
+    const delta = me.wonThisHand - me.committed;
+    if (delta > 0) lines.push(`你这手净赢 ${delta}`);
+    else if (delta < 0) lines.push(`你这手净输 ${-delta}`);
     else if (me.committed > 0) lines.push('你这手打平');
 
     $('result-text').innerHTML = lines.join('<br>');
@@ -682,13 +717,164 @@
     }
   }
 
+  // ---------- 联机 ----------
+
+  /**
+   * 联机模式没有本地循环 —— 界面完全被动：
+   * 服务器推 state 就重画，推 turn 就亮出按钮，点了按钮就把动作发回去。
+   * 所有判断都在服务器，客户端不推导也不预测。
+   */
+  function startOnline(roomCode, playerName) {
+    if (Sound) Sound.unlock();
+    engine = null;
+    view = null;
+    turnInfo = null;
+    humanResolve = null;
+    displayBoard = [];
+    shownKeys = new Set();
+    highlightCards = new Set();
+    winnerIds = new Set();
+    generation++;                 // 让可能还在跑的单机循环退场
+
+    $('log-body').innerHTML = '';
+    $('setup').classList.add('hidden');
+    $('gameover').classList.add('hidden');
+    $('game').classList.remove('hidden');
+    $('result-banner').classList.add('hidden');
+    $('room-info').classList.remove('hidden');
+    $('room-info').textContent = `房间 ${roomCode}`;
+    $('conn-info').classList.remove('hidden');
+
+    net = new window.PokerNet.NetClient({
+      room: roomCode,
+      name: playerName,
+      on: {
+        status: onNetStatus,
+        welcome: () => { appendLog(`已进入房间 ${roomCode}`, 'log-hand'); },
+        state: onNetState,
+        events: onNetEvents,
+        turn: onNetTurn,
+        serverError: onNetError,
+      },
+    });
+    net.connect();
+    startCountdown();
+  }
+
+  function onNetStatus(s) {
+    const el = $('conn-info');
+    const label = {
+      connecting: '连接中…', open: '已连接',
+      reconnecting: '断线重连中…', error: '连接失败',
+    }[s.state] || '';
+    el.textContent = label;
+    el.classList.toggle('bad', s.state === 'reconnecting' || s.state === 'error');
+  }
+
+  function onNetState(d) {
+    const previous = view;
+    view = d.view;
+    // 换手了就把动画状态清空，否则上一手的牌会被当成"已经出现过"
+    if (!previous || previous.handNumber !== view.handNumber) {
+      displayBoard = [];
+      shownKeys = new Set();
+      highlightCards = new Set();
+      winnerIds = new Set();
+      $('result-banner').classList.add('hidden');
+    }
+    if (view.handOver && view.result) showResultBanner();
+    syncBoard().then(render);
+    render();
+    // 不该我行动了就把按钮收掉
+    if (view.actorIndex !== view.you || view.handOver) clearActionBar();
+  }
+
+  function onNetEvents(events) {
+    for (const e of events) {
+      logEvent(e);
+      playEventSound(e);
+    }
+  }
+
+  function onNetTurn(d) {
+    turnInfo = d;
+    if (!view || view.actorIndex !== view.you) return;
+    renderActionButtons();
+  }
+
+  function onNetError(d) {
+    // stale_action 多半是自己手快点了两下，不值得打扰玩家
+    if (d.code === 'stale_action') return;
+    appendLog(`× ${d.message || d.code}`, 'log-street');
+  }
+
+  function clearActionBar() {
+    $('action-buttons').innerHTML = '';
+    $('raise-panel').classList.add('hidden');
+    $('action-prompt').textContent = '';
+    $('countdown').classList.add('hidden');
+  }
+
+  /** 倒计时按服务器给的截止时刻走，本地时钟偏移已经在 net 里校正过 */
+  function startCountdown() {
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = setInterval(() => {
+      const el = $('countdown');
+      if (!isOnline() || !turnInfo || !view || view.actorIndex !== view.you || view.handOver) {
+        el.classList.add('hidden');
+        return;
+      }
+      const left = Math.max(0, net.localDeadline(turnInfo.deadline) - Date.now());
+      el.classList.remove('hidden');
+      el.textContent = `${Math.ceil(left / 1000)} 秒`;
+      el.classList.toggle('urgent', left < 10000);
+    }, 250);
+  }
+
+  function stopOnline() {
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    if (net) { net.disconnect(); net = null; }
+    turnInfo = null;
+    $('room-info').classList.add('hidden');
+    $('conn-info').classList.add('hidden');
+  }
+
+  /** 联机时结算条只是展示，下一手由服务器安排 */
+  function showResultBanner() {
+    if (!view.result) return;
+    revealAll = true;
+    for (const pot of view.result.pots) {
+      for (const id of pot.winners) {
+        winnerIds.add(id);
+        const info = view.result.hands.find((h) => h.player === id);
+        if (info) for (const c of info.best) highlightCards.add(c);
+      }
+    }
+    const lines = view.result.pots.map((pot) => {
+      const names = pot.winners.map((id) => view.players[id].name).join('、');
+      const info = view.result.hands.find((h) => h.player === pot.winners[0]);
+      return view.result.showdown
+        ? `${pot.label} ${pot.amount} → ${names}（${info ? info.description : ''}）`
+        : `${names} 赢得 ${pot.amount}`;
+    });
+    const me = view.players[view.you];
+    const delta = me.wonThisHand - me.committed;
+    if (delta > 0) lines.push(`你这手净赢 ${delta}`);
+    else if (delta < 0) lines.push(`你这手净输 ${-delta}`);
+    $('result-text').innerHTML = lines.join('<br>');
+    $('result-banner').classList.remove('hidden');
+    $('next-hand-btn').textContent = '等待下一手…';
+  }
+
   // ---------- 启动 ----------
 
   function startGame(g) {
     // 浏览器只允许在用户手势里启动音频，点「开打」正好是个手势
     if (Sound) Sound.unlock();
+    stopOnline();
     engine = g;
     humanResolve = null;
+    syncLocalView();
     $('log-body').innerHTML = '';
     $('setup').classList.add('hidden');
     $('gameover').classList.add('hidden');
@@ -712,6 +898,13 @@
     };
 
     $('quit-btn').onclick = () => {
+      if (isOnline()) {
+        stopOnline();
+        $('game').classList.add('hidden');
+        $('result-banner').classList.add('hidden');
+        $('setup').classList.remove('hidden');
+        return;
+      }
       save();
       generation++;          // 结束当前循环
       humanResolve = null;
@@ -745,6 +938,30 @@
       resizeTimer = setTimeout(() => { if (engine) render(); }, 120);
     });
 
+    // 单机 / 联机切换
+    const soloTab = $('mode-solo');
+    const onlineTab = $('mode-online');
+    const showMode = (online) => {
+      soloTab.classList.toggle('active', !online);
+      onlineTab.classList.toggle('active', online);
+      $('solo-fields').classList.toggle('hidden', online);
+      $('online-fields').classList.toggle('hidden', !online);
+      const resume = $('resume-btn');
+      if (resume) resume.classList.toggle('hidden', online);
+    };
+    soloTab.onclick = () => showMode(false);
+    onlineTab.onclick = () => showMode(true);
+
+    $('join-btn').onclick = () => {
+      const code = ($('room-code').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+      const name = ($('player-name').value || '').trim().slice(0, 12);
+      if (!code) { $('room-code').focus(); return; }
+      startOnline(code, name || '玩家');
+    };
+    $('room-code').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') $('join-btn').click();
+    });
+
     renderResumeButton();
   }
 
@@ -769,6 +986,19 @@
     const card = document.querySelector('#setup .setup-card');
     card.insertBefore(btn, card.querySelector('.field'));
   }
+
+  // 联机是分布式的，出问题时光看画面判断不了。留一个只读的调试出口。
+  window.__holdemDebug = () => ({
+    online: isOnline(),
+    you: view && view.you,
+    actorIndex: view && view.actorIndex,
+    handNumber: view && view.handNumber,
+    handOver: view && view.handOver,
+    turnInfo,
+    clockOffset: net ? net.clockOffset : null,
+    localDeadline: net && turnInfo ? net.localDeadline(turnInfo.deadline) : null,
+    now: Date.now(),
+  });
 
   // 脚本挂在 body 末尾，DOM 已经就绪
   init();
