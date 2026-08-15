@@ -116,6 +116,11 @@
       return this.send('action', { handNumber, actionSeq, type, amount });
     }
 
+    /** 破产后申请补码。真正到账要等下一手开始，服务器说了算 */
+    rebuy() {
+      return this.send('rebuy', {});
+    }
+
     /** 把服务器给的截止时刻换算成本地时钟 */
     localDeadline(serverDeadline) {
       return serverDeadline - this.clockOffset;

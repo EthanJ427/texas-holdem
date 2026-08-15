@@ -114,6 +114,8 @@
   let net = null;         // 联机客户端；单机时为 null
   let view = null;        // 渲染唯一依据。单机来自 engine.viewFor(0)，联机来自服务器
   let turnInfo = null;    // 联机时服务器给的本回合信息（含截止时刻）
+  let seatInfo = null;    // 联机时服务器给的座位表（谁在线、谁排着补码）；单机为 null
+  let rebuyPending = false;   // 已经申请补码，等下一手到账
   let countdownTimer = null;
   let displayBoard = [];
   let revealAll = false;
@@ -296,6 +298,11 @@
     seats.appendChild(dealer);
   }
 
+  /** 这个座位是不是排着补码。只有联机才有这份数据，单机恒为 false */
+  function rebuyingAt(i) {
+    return !!(seatInfo && seatInfo[i] && seatInfo[i].rebuyPending);
+  }
+
   function seatEl(p, i) {
     const pos = seatPositions()[displaySeat(i)];
     const seat = document.createElement('div');
@@ -310,7 +317,7 @@
 
     // 状态标签
     let status = null;
-    if (p.busted) status = { text: 'Out', cls: '' };
+    if (p.busted) status = { text: rebuyingAt(i) ? 'Rebuying' : 'Out', cls: '' };
     else if (thinkingId === i) status = { text: 'Thinking', cls: 'thinking' };
     else if (p.folded) status = { text: 'Folded', cls: '' };
     else if (p.allIn) status = { text: 'All in', cls: 'allin' };
@@ -455,6 +462,9 @@
         break;
       case 'hand-end':
         Sound.pot();
+        break;
+      case 'rebuy':
+        Sound.chips(0.35);
         break;
       default:
         break;
@@ -730,6 +740,8 @@
     engine = null;
     view = null;
     turnInfo = null;
+    seatInfo = null;
+    rebuyPending = false;
     humanResolve = null;
     displayBoard = [];
     shownKeys = new Set();
@@ -778,8 +790,12 @@
   function onNetState(d) {
     const previous = view;
     view = d.view;
+    seatInfo = d.seats || null;
     // you 为 null = 还在等下一手入座，此时是旁观视角
     const waiting = view.you === null || view.you === undefined;
+    // 补码状态只认「服务器说排着」和「筹码回来了」这两个信号，
+    // 不让先前在路上的那份 state 把刚点下去的按钮又翻出来
+    if (!waiting && rebuyingAt(view.you)) rebuyPending = true;
     $('action-prompt').textContent = waiting ? 'Hand in progress — you are seated next hand' : '';
     // 换手了就把动画状态清空，否则上一手的牌会被当成"已经出现过"
     if (!previous || previous.handNumber !== view.handNumber) {
@@ -795,6 +811,35 @@
     // 不该我行动了就把按钮收掉
     if (waiting || view.actorIndex !== view.you || view.handOver) clearActionBar();
     if (waiting) $('action-prompt').textContent = 'Hand in progress — you are seated next hand';
+    else offerRebuy();
+  }
+
+  /**
+   * 破产后的补码按钮。
+   *
+   * 全下还没分出胜负时筹码同样是 0，但那不算破产 —— 池子可能还是他的。
+   * 所以要等这一手打完（或者已经弃牌出局）才认。
+   */
+  function offerRebuy() {
+    const me = view.players[view.you];
+    if (!me) return;
+    if (me.chips > 0) { rebuyPending = false; return; }
+    if (!view.handOver && !me.folded && !me.busted) return;   // 全下待定，先别问
+
+    if (rebuyPending) {
+      $('action-prompt').textContent = 'Rebuying — you are back next hand';
+      return;
+    }
+    const amount = (net && net.config && net.config.rebuyChips) || view.startingChips;
+    $('action-prompt').textContent = 'You are out of chips';
+    const btn = makeActBtn('call', 'Rebuy', String(amount));
+    btn.onclick = () => {
+      rebuyPending = true;
+      net.rebuy();
+      $('action-buttons').innerHTML = '';
+      $('action-prompt').textContent = 'Rebuying — you are back next hand';
+    };
+    $('action-buttons').appendChild(btn);
   }
 
   function onNetEvents(events) {
@@ -843,6 +888,8 @@
     if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
     if (net) { net.disconnect(); net = null; }
     turnInfo = null;
+    seatInfo = null;
+    rebuyPending = false;
     $('room-info').classList.add('hidden');
     $('conn-info').classList.add('hidden');
   }
@@ -1004,6 +1051,8 @@
     actorIndex: view && view.actorIndex,
     handNumber: view && view.handNumber,
     handOver: view && view.handOver,
+    chips: view && view.players && typeof view.you === 'number' ? view.players[view.you].chips : null,
+    rebuyPending,
     turnInfo,
     clockOffset: net ? net.clockOffset : null,
     localDeadline: net && turnInfo ? net.localDeadline(turnInfo.deadline) : null,

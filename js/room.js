@@ -31,6 +31,8 @@
     fillWithBots: true,
     botLevels: ['intermediate', 'novice', 'expert', 'novice', 'intermediate'],
     maxMissedHands: 3,      // 连续这么多手没连上就请下座位
+    rebuyChips: null,       // 补码金额，null 表示按 startingChips 买满
+    botRebuy: true,         // 机器人破产后自动补码。关掉的话桌子会慢慢空掉
   };
 
   class Room {
@@ -47,6 +49,10 @@
       this.handNumber = 0;
       // 牌局进行中来的人先排队，下一手开始时才真正入座
       this.pending = [];
+      // 房间自己发的事件（补码之类）。引擎每手重建，这些发生在建引擎之前，
+      // 挂不到引擎的事件流上，所以单独排一队，下次 pushEvents 一起送出去。
+      this.roomEvents = [];
+      this.rebuyChipsAdded = 0;   // 补码一共往桌上加了多少，记账用
 
       if (this.config.fillWithBots) this.fillBots();
     }
@@ -73,6 +79,8 @@
           connId: null,
           missedHands: 0,
           leaveAfterHand: false,
+          wantsRebuy: false,
+          rebuys: 0,
         };
       }
     }
@@ -121,12 +129,16 @@
       }
     }
 
-    /** 事件是所有人一样的（已经裁掉牌面数据），可以真广播 */
+    /**
+     * 事件是所有人一样的（已经裁掉牌面数据），可以真广播。
+     * 房间自己的事件排在引擎事件前面：补码发生在这一手的引擎建起来之前，
+     * 顺序上也确实早于「第 N 手开始」。
+     */
     pushEvents() {
-      if (!this.engine) return;
-      const raw = this.engine.drainEvents();
-      if (raw.length === 0) return;
-      const safe = this.engine.eventsFor(null, raw);
+      const raw = this.engine ? this.engine.drainEvents() : [];
+      const safe = this.roomEvents.concat(this.engine ? this.engine.eventsFor(null, raw) : []);
+      this.roomEvents = [];
+      if (safe.length === 0) return;
       for (const s of this.seats) {
         if (!s || s.isBot || !s.connId) continue;
         this.send(s.connId, 'events', { events: safe });
@@ -152,7 +164,8 @@
         seat: i, name: s.name, isBot: s.isBot,
         connected: s.isBot ? true : !!s.connId,
         chips: s.chips,
-      } : { seat: i, name: null, isBot: false, connected: false, chips: 0 }));
+        rebuyPending: !!s.wantsRebuy,
+      } : { seat: i, name: null, isBot: false, connected: false, chips: 0, rebuyPending: false }));
     }
 
     // ---------- 收消息 ----------
@@ -164,6 +177,7 @@
         switch (msg && msg.t) {
           case 'join': this.onJoin(connId, msg, now); break;
           case 'stand': this.onStand(connId, msg); break;
+          case 'rebuy': this.onRebuy(connId, msg, now); break;
           case 'action': this.onAction(connId, msg, now); break;
           default:
             this.send(connId, 'error', { code: 'bad_message', message: 'unknown message type' }, msg && msg.id);
@@ -231,6 +245,8 @@
           connId,
           missedHands: 0,
           leaveAfterHand: false,
+          wantsRebuy: false,
+          rebuys: 0,
         };
         this.seats[index] = seat;
       } else {
@@ -266,6 +282,48 @@
       if (!seat) return;
       seat.leaveAfterHand = true;
       this.send(connId, 'ok', { standing: true }, msg.id);
+    }
+
+    rebuyAmount() {
+      return this.config.rebuyChips || this.config.startingChips;
+    }
+
+    /** 座位此刻真实的筹码。牌局进行中要看引擎，座位上那份是这一手开始时的快照。 */
+    liveChips(seat) {
+      if (this.engine && !this.engine.handOver) {
+        const p = this.engine.players[seat.seat];
+        if (p) return p.chips;
+      }
+      return seat.chips;
+    }
+
+    /**
+     * 补码。这里只记下意愿，筹码一律等到下一手开始才到账 ——
+     * 牌局中途给人加筹码，这一手的边池就算错了。
+     *
+     * 全下的人此刻筹码同样是 0，但他还在争池子，所以「到底给不给」
+     * 要留到开牌前由 grantRebuys() 判断，那时胜负已定。
+     */
+    onRebuy(connId, msg, now) {
+      const seat = this.seatByConn(connId);
+      if (!seat) {
+        this.send(connId, 'error', { code: 'bad_token', message: 'you are not seated at this table' }, msg.id);
+        return;
+      }
+      if (this.liveChips(seat) > 0) {
+        this.send(connId, 'error', { code: 'not_busted', message: 'you still have chips' }, msg.id);
+        return;
+      }
+
+      seat.wantsRebuy = true;
+      this.send(connId, 'ok', { rebuy: true, chips: this.rebuyAmount() }, msg.id);
+
+      // 桌上不够两个人时房间是停着的（nextHandAt 被清成 null），补码要把它叫醒，
+      // 否则最后一个还有筹码的人只能干等
+      if (this.nextHandAt === null && (!this.engine || this.engine.handOver)) {
+        this.nextHandAt = now + this.config.handGapMs;
+      }
+      this.pushState();
     }
 
     /** 连接断开。不立刻弃牌，但计时照走 —— 否则拔网线就是无限思考时间。 */
@@ -402,10 +460,12 @@
       }
       this.seatPending();
       if (this.config.fillWithBots) this.fillBots();
+      this.grantRebuys();
 
       const playable = this.seats.filter((s) => s && s.chips > 0);
       if (playable.length < 2) {
         this.nextHandAt = null;
+        this.pushEvents();      // 补码的消息该发还是要发，哪怕这一手开不起来
         return;
       }
 
@@ -453,7 +513,41 @@
         startingChips: this.config.startingChips,
         turnSeconds: this.config.turnSeconds,
         fillWithBots: this.config.fillWithBots,
+        rebuyChips: this.rebuyAmount(),
       };
+    }
+
+    /**
+     * 发放补码。只在一手牌开始前调用，是筹码唯一凭空增加的地方。
+     *
+     * 判断标准是「此刻筹码是不是 0」，不是「当初申请时是不是 0」——
+     * 全下的人申请时也是 0，赢回来了就不该再白拿一份。
+     */
+    grantRebuys() {
+      const amount = this.rebuyAmount();
+      for (const s of this.seats) {
+        if (!s) continue;
+        if (s.chips > 0) { s.wantsRebuy = false; continue; }
+
+        if (s.isBot) {
+          if (!this.config.botRebuy) continue;
+        } else if (!s.wantsRebuy) {
+          continue;
+        } else if (!s.connId) {
+          continue;      // 人不在，先把这个意愿留着，等他重连回来那一手再补
+        }
+
+        s.chips = amount;
+        s.wantsRebuy = false;
+        s.rebuys++;
+        this.rebuyChipsAdded += amount;
+        this.roomEvents.push({
+          type: 'rebuy',
+          player: s.seat,
+          amount,
+          text: `${s.name} buys back in for ${amount}`,
+        });
+      }
     }
 
     /** 把等候队列里的人安置到座位上。只在一手牌开始前调用。 */
@@ -474,6 +568,8 @@
           connId: waiting.connId,
           missedHands: 0,
           leaveAfterHand: false,
+          wantsRebuy: false,
+          rebuys: 0,
         };
         // 告诉他坐到了几号位
         this.send(waiting.connId, 'welcome', {

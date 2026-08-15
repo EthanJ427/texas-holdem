@@ -339,6 +339,157 @@
     ok(stateMsgs > 20, '样本量足够');
   });
 
+  suite('破产后补码：下一手回到桌上', () => {
+    const room = makeRoom({ handGapMs: 0, botRebuy: false });
+    const w = firstOf(room.handle('c1', { t: 'join', id: 1, d: { name: '老王' } }, 0), 'welcome');
+    const me = w.d.you;
+
+    room.seats[me].chips = 0;          // 上一手输光了
+    room.tick(0);                      // 这一手他坐在那儿只能看
+    ok(room.engine && room.engine.players[me].busted, '筹码归零的人这一手是出局状态');
+
+    const out = room.handle('c1', { t: 'rebuy', id: 2 }, 100);
+    eq(firstOf(out, 'error'), null, '破产的人可以申请补码');
+    const okMsg = firstOf(out, 'ok');
+    eq(okMsg && okMsg.d.rebuy, true, '服务器确认收到申请');
+    eq(room.seats[me].chips, 0, '筹码不在这一手到账 —— 中途加筹码会算错边池');
+
+    const seatsMsg = firstOf(out, 'state');
+    ok(seatsMsg && seatsMsg.d.seats[me].rebuyPending, '座位表里标出了他排着补码');
+
+    // 打到下一手开始
+    let t = 100;
+    for (let i = 0; i < 4000; i++) {
+      room.tick(t);
+      const a = room.engine && !room.engine.handOver && room.engine.currentActor();
+      if (a && !room.seats[a.id].isBot) {
+        room.handle(room.seats[a.id].connId, {
+          t: 'action', id: 600 + i,
+          d: { handNumber: room.engine.handNumber, actionSeq: room.actionSeq, type: 'fold' },
+        }, t);
+      }
+      if (room.seats[me].chips > 0) break;
+      t += 50;
+    }
+
+    eq(room.seats[me].chips, 1000, '下一手开始时买满了一份');
+    eq(room.seats[me].wantsRebuy, false, '申请是一次性的，不会每手都补');
+    eq(room.engine.players[me].busted, false, '重新入局，不再是出局状态');
+    eq(room.rebuyChipsAdded, 1000, '记下了往桌上加了多少筹码');
+  });
+
+  suite('还有筹码的人不能补码', () => {
+    const room = makeRoom({ botRebuy: false });
+    room.handle('c1', { t: 'join', id: 1, d: { name: '老王' } }, 0);
+    const out = room.handle('c1', { t: 'rebuy', id: 2 }, 0);
+    eq(firstOf(out, 'error').d.code, 'not_busted', '手里有筹码就没得补');
+    eq(room.rebuyChipsAdded, 0, '没有凭空多出筹码');
+  });
+
+  suite('全下赢回来的人不会白拿一份补码', () => {
+    // 全下待定的时候筹码也是 0，那时申请是合法的 ——
+    // 但发不发得成要等开牌前再看一眼：赢回来了就不该再给。
+    const room = makeRoom({ handGapMs: 0, botRebuy: false });
+    const w = firstOf(room.handle('c1', { t: 'join', id: 1, d: { name: '老王' } }, 0), 'welcome');
+    const me = w.d.you;
+
+    room.seats[me].chips = 0;
+    room.handle('c1', { t: 'rebuy', id: 2 }, 0);
+    eq(room.seats[me].wantsRebuy, true, '申请记下了');
+
+    room.seats[me].chips = 500;        // 假装这手全下赢了回来
+    room.startHand(0);
+
+    eq(room.seats[me].chips, 500, '筹码回来了就不再补，赢的钱也没被冲掉');
+    eq(room.seats[me].wantsRebuy, false, '过期的申请被清掉');
+    eq(room.rebuyChipsAdded, 0, '一分钱也没多发');
+  });
+
+  suite('机器人自动补码，桌子不会慢慢空掉', () => {
+    const room = makeRoom({ handGapMs: 0 });
+    room.handle('c1', { t: 'join', id: 1, d: { name: '老王' } }, 0);
+
+    const bots = room.seats.filter((s) => s.isBot);
+    for (const b of bots.slice(0, 4)) b.chips = 0;      // 四个机器人输光
+
+    room.startHand(0);
+    const broke = room.seats.filter((s) => s && s.chips === 0);
+    eq(broke.length, 0, '开牌前机器人都补上了');
+    eq(room.rebuyChipsAdded, 4000, '一共补了四份');
+
+    const room2 = makeRoom({ handGapMs: 0, botRebuy: false });
+    room2.handle('c1', { t: 'join', id: 1, d: { name: '老王' } }, 0);
+    for (const b of room2.seats.filter((s) => s.isBot).slice(0, 4)) b.chips = 0;
+    room2.startHand(0);
+    eq(room2.seats.filter((s) => s && s.chips === 0).length, 4, '关掉开关就真的不补（反向对照）');
+  });
+
+  suite('补码能把停住的房间叫醒', () => {
+    // 只剩一个人有筹码时房间会停下来（nextHandAt 清成 null）。
+    // 补码如果不重新排上下一手，最后那个人就永远在等。
+    const room = makeRoom({ fillWithBots: false, handGapMs: 0 });
+    room.handle('c1', { t: 'join', id: 1, d: { name: 'A' } }, 0);
+    const wB = firstOf(room.handle('c2', { t: 'join', id: 2, d: { name: 'B' } }, 0), 'welcome');
+    room.seats[wB.d.you].chips = 0;
+
+    room.tick(0);
+    eq(room.engine, null, '不够两个人，牌局开不起来');
+    eq(room.nextHandAt, null, '房间停住了');
+
+    room.handle('c2', { t: 'rebuy', id: 3 }, 1000);
+    ok(room.nextHandAt !== null, '补码把下一手重新排上了');
+
+    room.tick(room.nextHandAt);
+    ok(room.engine && !room.engine.handOver, '牌局重新开了起来');
+    ok(room.seats[wB.d.you].chips > 0, '补码到账');
+  });
+
+  suite('断线的人先不补，回来那一手再补', () => {
+    const room = makeRoom({ handGapMs: 0, botRebuy: false });
+    const w = firstOf(room.handle('c1', { t: 'join', id: 1, d: { name: '老王' } }, 0), 'welcome');
+    const me = w.d.you;
+    const token = w.d.token;
+
+    room.seats[me].chips = 0;
+    room.handle('c1', { t: 'rebuy', id: 2 }, 0);
+    room.disconnect('c1');
+
+    room.startHand(0);
+    eq(room.seats[me].chips, 0, '人不在就先不发筹码');
+    eq(room.seats[me].wantsRebuy, true, '但申请留着，没被吃掉');
+
+    room.handle('c9', { t: 'join', id: 3, d: { name: '老王', token } }, 100);
+    room.startHand(100);
+    eq(room.seats[me].chips, 1000, '重连之后的第一手补上');
+  });
+
+  suite('房间自己发的事件也守白名单', () => {
+    // 补码事件不经过引擎的 eventsFor，是房间直接塞进 outbox 的 ——
+    // 这条通道很容易漏掉，所以单独盯住。
+    const { HoldemEngine } = window.PokerEngine;
+    const room = makeRoom({ handGapMs: 0, botRebuy: false });
+    const w = firstOf(room.handle('c1', { t: 'join', id: 1, d: { name: '老王' } }, 0), 'welcome');
+    const me = w.d.you;
+
+    room.seats[me].chips = 0;
+    room.handle('c1', { t: 'rebuy', id: 2 }, 0);
+    room.outbox = [];
+    room.startHand(0);
+
+    const events = pick(room.outbox, 'events').flatMap((m) => m.d.events);
+    const rebuyEvent = events.find((e) => e.type === 'rebuy');
+    ok(rebuyEvent, '补码这件事广播了出去，别人看得到');
+    eq(rebuyEvent.player, me, '事件指明了是谁补的');
+
+    const unknown = [];
+    for (const e of events) {
+      for (const k of Object.keys(e)) {
+        if (!HoldemEngine.EVENT_KEYS.includes(k)) unknown.push(`${e.type}.${k}`);
+      }
+    }
+    eq(unknown.join(','), '', '没有白名单之外的字段');
+  });
+
   suite('筹码在手与手之间正确结转', () => {
     const room = makeRoom({ handGapMs: 0 });
     room.handle('c1', { t: 'join', id: 1, d: { name: '老王' } }, 0);
@@ -354,9 +505,11 @@
         lastHand = room.engine.handNumber;
         handsSeen++;
         const total = room.seats.reduce((s, x) => s + (x ? x.chips : 0), 0);
-        // 一手开始时座位上的筹码总量应该守恒
-        if (Math.abs(total - 6000) > 0.001 && handsSeen > 1) {
-          chipErr = chipErr || `第 ${handsSeen} 手开始时座位筹码合计 ${total}`;
+        // 一手开始时座位上的筹码总量应该守恒。
+        // 补码是唯一凭空加筹码的地方，所以对账要把它算进来。
+        const expected = 6000 + room.rebuyChipsAdded;
+        if (Math.abs(total - expected) > 0.001 && handsSeen > 1) {
+          chipErr = chipErr || `第 ${handsSeen} 手开始时座位筹码合计 ${total}，应为 ${expected}`;
         }
       }
       const a = room.engine && !room.engine.handOver && room.engine.currentActor();
