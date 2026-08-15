@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>德州扑克</title>
+  <title>Texas Hold'em</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,52 +11,53 @@
   <!-- 开局设置 -->
   <div id="setup" class="screen">
     <div class="setup-card">
-      <h1>德州扑克</h1>
-      <p class="tagline">六人桌 · 无限注</p>
+      <h1>Texas Hold'em</h1>
+      <p class="tagline">Six-max · No-limit</p>
 
       <div class="mode-tabs">
-        <button class="mode-tab active" id="mode-solo">单机</button>
-        <button class="mode-tab" id="mode-online">和朋友联机</button>
+        <button class="mode-tab active" id="mode-solo">Solo</button>
+        <button class="mode-tab" id="mode-online">Play with friends</button>
       </div>
 
       <!-- 联机：房间号 + 昵称 -->
       <div id="online-fields" class="hidden">
         <label class="field">
-          <span class="field-label">你的名字</span>
-          <input type="text" id="player-name" maxlength="12" placeholder="老王">
+          <span class="field-label">Your name</span>
+          <input type="text" id="player-name" maxlength="12" placeholder="Alex">
         </label>
         <label class="field">
-          <span class="field-label">房间号（和朋友输一样的就进同一桌）</span>
-          <input type="text" id="room-code" maxlength="8" placeholder="比如 8888" autocapitalize="characters">
+          <span class="field-label">Room code — friends who type the same one join your table</span>
+          <input type="text" id="room-code" maxlength="8" placeholder="e.g. 8888" autocapitalize="characters">
         </label>
-        <button id="join-btn" class="primary-btn">进入房间</button>
+        <button id="join-btn" class="primary-btn">Join room</button>
         <div class="setup-note">
-          空位由电脑对手补齐，两个人也能开打。每个决定 60 秒，超时自动过牌或弃牌。
+          Empty seats fill with bots, so two players are enough. 60 seconds per decision,
+          then the server checks or folds for you.
         </div>
       </div>
 
       <div id="solo-fields">
       <label class="field">
-        <span class="field-label">对手强度</span>
+        <span class="field-label">Opponents</span>
         <select id="difficulty">
-          <option value="mixed">混合桌 —— 各种水平都有（推荐）</option>
-          <option value="novice">全是新手 —— 轻松热身</option>
-          <option value="intermediate">全是进阶 —— 有来有回</option>
-          <option value="expert">全是高手 —— 硬仗</option>
+          <option value="mixed">Mixed table — a bit of everything (recommended)</option>
+          <option value="novice">All novices — an easy warm-up</option>
+          <option value="intermediate">All intermediates — a real game</option>
+          <option value="expert">All experts — a hard fight</option>
         </select>
       </label>
 
       <label class="field">
-        <span class="field-label">初始筹码</span>
+        <span class="field-label">Starting stack</span>
         <select id="stack">
-          <option value="1000">1000（50 个大盲）</option>
-          <option value="2000">2000（100 个大盲）</option>
-          <option value="5000">5000（250 个大盲，可以慢慢打）</option>
+          <option value="1000">1,000 (50 big blinds)</option>
+          <option value="2000">2,000 (100 big blinds)</option>
+          <option value="5000">5,000 (250 big blinds — a long session)</option>
         </select>
       </label>
 
       <label class="field">
-        <span class="field-label">盲注</span>
+        <span class="field-label">Blinds</span>
         <select id="blinds">
           <option value="10">10 / 20</option>
           <option value="25">25 / 50</option>
@@ -64,12 +65,12 @@
         </select>
       </label>
 
-      <button id="start-btn" class="primary-btn">坐下开打</button>
+      <button id="start-btn" class="primary-btn">Sit down</button>
       </div>
 
       <div class="setup-note">
-        电脑对手只看得见自己的底牌和公共牌，和你掌握的信息完全一样，不会偷看。
-        <a href="tests/" target="_blank">查看测试</a>
+        Bots see only their own cards and the board — exactly what you see. They cannot peek.
+        <a href="tests/" target="_blank">View the tests</a>
       </div>
     </div>
   </div>
@@ -78,15 +79,15 @@
   <div id="game" class="screen hidden">
     <header class="topbar">
       <div class="topbar-left">
-        <span class="hand-counter">第 <b id="hand-number">0</b> 手</span>
+        <span class="hand-counter">Hand <b id="hand-number">0</b></span>
         <span class="blind-info" id="blind-info"></span>
         <span class="room-info hidden" id="room-info"></span>
         <span class="conn-info hidden" id="conn-info"></span>
       </div>
       <div class="topbar-right">
-        <button id="sound-toggle" class="ghost-btn" title="声音开关">🔊 声音</button>
-        <button id="log-toggle" class="ghost-btn" title="牌局记录">记录</button>
-        <button id="quit-btn" class="ghost-btn">退出</button>
+        <button id="sound-toggle" class="ghost-btn" title="Sound">🔊 Sound</button>
+        <button id="log-toggle" class="ghost-btn" title="Hand history">History</button>
+        <button id="quit-btn" class="ghost-btn">Leave</button>
       </div>
     </header>
 
@@ -94,7 +95,7 @@
       <div class="felt">
         <div class="table-center">
           <div class="pot-display">
-            <span class="pot-label">底池</span>
+            <span class="pot-label">Pot</span>
             <span class="pot-amount" id="pot-amount">0</span>
           </div>
           <div class="board" id="board"></div>
@@ -106,7 +107,7 @@
 
     <div class="actionbar" id="actionbar">
       <div class="action-info">
-        <span id="action-prompt">等待发牌…</span>
+        <span id="action-prompt">Waiting for the deal…</span>
         <span class="countdown hidden" id="countdown"></span>
       </div>
       <div class="action-buttons" id="action-buttons"></div>
@@ -117,16 +118,16 @@
           <output class="raise-amount" id="raise-amount">0</output>
         </div>
         <div class="raise-confirm">
-          <button class="ghost-btn" id="raise-cancel">返回</button>
-          <button class="primary-btn" id="raise-confirm">确定</button>
+          <button class="ghost-btn" id="raise-cancel">Back</button>
+          <button class="primary-btn" id="raise-confirm">Confirm</button>
         </div>
       </div>
     </div>
 
     <aside class="log-panel hidden" id="log-panel">
       <div class="log-header">
-        <span>牌局记录</span>
-        <button class="ghost-btn" id="log-close">关闭</button>
+        <span>Hand history</span>
+        <button class="ghost-btn" id="log-close">Close</button>
       </div>
       <div class="log-body" id="log-body"></div>
     </aside>
@@ -135,15 +136,15 @@
   <!-- 每手结束后的结算条 -->
   <div class="result-banner hidden" id="result-banner">
     <div class="result-text" id="result-text"></div>
-    <button class="primary-btn" id="next-hand-btn">下一手</button>
+    <button class="primary-btn" id="next-hand-btn">Next hand</button>
   </div>
 
   <!-- 牌局结束 -->
   <div class="screen hidden" id="gameover">
     <div class="setup-card">
-      <h1 id="gameover-title">牌局结束</h1>
+      <h1 id="gameover-title">Game over</h1>
       <p class="tagline" id="gameover-text"></p>
-      <button id="restart-btn" class="primary-btn">再来一局</button>
+      <button id="restart-btn" class="primary-btn">Play again</button>
     </div>
   </div>
 

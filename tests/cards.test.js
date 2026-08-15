@@ -16,17 +16,17 @@
 
   suite('牌型识别', () => {
     const cases = [
-      ['As Ks Qs Js Ts', '同花顺', '皇家同花顺'],
-      ['5s 4s 3s 2s As', '同花顺', '5 高同花顺'],   // 钢轮
-      ['9h 9d 9s 9c 2h', '四条', '四条 9'],
-      ['8h 8d 8s 3c 3h', '葫芦', '葫芦 8 带 3'],
-      ['Ah Jh 9h 5h 2h', '同花', 'A 高同花'],
-      ['9h 8d 7s 6c 5h', '顺子', '9 高顺子'],
-      ['5h 4d 3s 2c Ah', '顺子', '5 高顺子'],       // 轮子：A 当 1 用
-      ['Qh Qd Qs 7c 2h', '三条', '三条 Q'],
-      ['Kh Kd 4s 4c 9h', '两对', '两对 K/4'],
-      ['Th Td 8s 5c 2h', '一对', '一对 10'],
-      ['Ah Qd 9s 5c 2h', '高牌', '高牌 A'],
+      ['As Ks Qs Js Ts', 'Straight Flush', 'Royal Flush'],
+      ['5s 4s 3s 2s As', 'Straight Flush', '5-high Straight Flush'],   // 钢轮
+      ['9h 9d 9s 9c 2h', 'Four of a Kind', 'Quad 9s'],
+      ['8h 8d 8s 3c 3h', 'Full House', '8s full of 3s'],
+      ['Ah Jh 9h 5h 2h', 'Flush', 'A-high Flush'],
+      ['9h 8d 7s 6c 5h', 'Straight', '9-high Straight'],
+      ['5h 4d 3s 2c Ah', 'Straight', '5-high Straight'],       // 轮子：A 当 1 用
+      ['Qh Qd Qs 7c 2h', 'Three of a Kind', 'Trip Qs'],
+      ['Kh Kd 4s 4c 9h', 'Two Pair', 'Two Pair, Ks and 4s'],
+      ['Th Td 8s 5c 2h', 'Pair', 'Pair of 10s'],
+      ['Ah Qd 9s 5c 2h', 'High Card', 'A High'],
     ];
     for (const [h, cat, d] of cases) {
       eq(name(h), cat, `${h} → ${cat}`);
@@ -38,9 +38,9 @@
     // T 是扑克圈的单字符记号，但真实扑克牌上印的是 10。
     // 凡是会出现在屏幕上的地方都必须显示 10。
     eq(C.cardName(card('Td')), '10♦', '牌面显示 10 而不是 T');
-    eq(desc('Th Td 8s 5c 2h'), '一对 10', '牌型描述里也是 10');
-    eq(desc('Th Td Ts 5c 2h'), '三条 10', '三条同理');
-    eq(desc('Ah Kh Qh Jh Th'), '皇家同花顺', '皇家同花顺不受影响');
+    eq(desc('Th Td 8s 5c 2h'), 'Pair of 10s', '牌型描述里也是 10');
+    eq(desc('Th Td Ts 5c 2h'), 'Trip 10s', '三条同理');
+    eq(desc('Ah Kh Qh Jh Th'), 'Royal Flush', '皇家同花顺不受影响');
     eq(C.RANK_LABELS[8], '10', 'RANK_LABELS 第 9 项是 10');
     eq(C.RANK_CHARS[8], 'T', '内部记号仍然是单字符 T');
     eq(C.RANK_LABELS.length, 13, '标签表长度正确');
@@ -70,14 +70,14 @@
   });
 
   suite('七张取最优五张', () => {
-    eq(desc('As Ah Ad Kc Kh 7s 2d'), '葫芦 A 带 K', '七张中取出葫芦而非三条');
-    eq(desc('2h 3d 9h 8d 7s 6c 5h'), '9 高顺子', '公共牌成顺，取出顺子');
-    eq(desc('As Ks Qs Js Ts 2h 3d'), '皇家同花顺', '七张中取出皇家同花顺');
-    eq(C.describe(C.evaluate(hand('As Ah Ad Kc Kh 7s'))), '葫芦 A 带 K', '六张分支同样正确');
+    eq(desc('As Ah Ad Kc Kh 7s 2d'), 'As full of Ks', '七张中取出葫芦而非三条');
+    eq(desc('2h 3d 9h 8d 7s 6c 5h'), '9-high Straight', '公共牌成顺，取出顺子');
+    eq(desc('As Ks Qs Js Ts 2h 3d'), 'Royal Flush', '七张中取出皇家同花顺');
+    eq(C.describe(C.evaluate(hand('As Ah Ad Kc Kh 7s'))), 'As full of Ks', '六张分支同样正确');
     // 四张同花 + 第五张不同花，不能误判成同花
-    eq(name('Ah Kh Qh Jh 9s 3d 2c'), '高牌', '只有四张同花不算同花');
+    eq(name('Ah Kh Qh Jh 9s 3d 2c'), 'High Card', '只有四张同花不算同花');
     // 只有四连，不能误判成顺子
-    eq(name('9h 8d 7s 6c 2h 3d Kc'), '高牌', '只有四连不算顺子');
+    eq(name('9h 8d 7s 6c 2h 3d Kc'), 'High Card', '只有四连不算顺子');
   });
 
   suite('最优五张牌的取出', () => {
@@ -90,8 +90,8 @@
 
   suite('50 万次随机发牌 vs 已知七张牌型概率', () => {
     const expected = {
-      '高牌': 17.412, '一对': 43.822, '两对': 23.496, '三条': 4.829,
-      '顺子': 4.619, '同花': 3.025, '葫芦': 2.596, '四条': 0.168, '同花顺': 0.0311,
+      'High Card': 17.412, 'Pair': 43.822, 'Two Pair': 23.496, 'Three of a Kind': 4.829,
+      'Straight': 4.619, 'Flush': 3.025, 'Full House': 2.596, 'Four of a Kind': 0.168, 'Straight Flush': 0.0311,
     };
     const N = 500000;
     const counts = {};

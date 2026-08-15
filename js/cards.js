@@ -33,7 +33,8 @@
   };
 
   const CATEGORY_NAMES = [
-    '高牌', '一对', '两对', '三条', '顺子', '同花', '葫芦', '四条', '同花顺',
+    'High Card', 'Pair', 'Two Pair', 'Three of a Kind', 'Straight',
+    'Flush', 'Full House', 'Four of a Kind', 'Straight Flush',
   ];
 
   const rankOf = (card) => card >> 2;
@@ -169,15 +170,15 @@
 
     switch (cat) {
       case CATEGORY.STRAIGHT_FLUSH:
-        return k[0] === 12 ? '皇家同花顺' : `${R(k[0])} 高同花顺`;
-      case CATEGORY.QUADS: return `四条 ${R(k[0])}`;
-      case CATEGORY.FULL_HOUSE: return `葫芦 ${R(k[0])} 带 ${R(k[3])}`;
-      case CATEGORY.FLUSH: return `${R(k[0])} 高同花`;
-      case CATEGORY.STRAIGHT: return `${R(k[0])} 高顺子`;
-      case CATEGORY.TRIPS: return `三条 ${R(k[0])}`;
-      case CATEGORY.TWO_PAIR: return `两对 ${R(k[0])}/${R(k[2])}`;
-      case CATEGORY.PAIR: return `一对 ${R(k[0])}`;
-      default: return `高牌 ${R(k[0])}`;
+        return k[0] === 12 ? 'Royal Flush' : `${R(k[0])}-high Straight Flush`;
+      case CATEGORY.QUADS: return `Quad ${R(k[0])}s`;
+      case CATEGORY.FULL_HOUSE: return `${R(k[0])}s full of ${R(k[3])}s`;
+      case CATEGORY.FLUSH: return `${R(k[0])}-high Flush`;
+      case CATEGORY.STRAIGHT: return `${R(k[0])}-high Straight`;
+      case CATEGORY.TRIPS: return `Trip ${R(k[0])}s`;
+      case CATEGORY.TWO_PAIR: return `Two Pair, ${R(k[0])}s and ${R(k[2])}s`;
+      case CATEGORY.PAIR: return `Pair of ${R(k[0])}s`;
+      default: return `${R(k[0])} High`;
     }
   }
 

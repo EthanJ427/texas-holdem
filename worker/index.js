@@ -45,7 +45,7 @@ export class TableDO {
 
   async fetch(request) {
     if (request.headers.get('Upgrade') !== 'websocket') {
-      return new Response('这个地址只接受 WebSocket 连接', { status: 426 });
+      return new Response('This endpoint accepts WebSocket connections only', { status: 426 });
     }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -63,7 +63,7 @@ export class TableDO {
       try {
         msg = JSON.parse(event.data);
       } catch (e) {
-        this.sendTo(connId, { t: 'error', d: { code: 'bad_message', message: '不是合法的 JSON' } });
+        this.sendTo(connId, { t: 'error', d: { code: 'bad_message', message: 'not valid JSON' } });
         return;
       }
       this.flush(this.room.handle(connId, msg, Date.now()));
@@ -133,6 +133,6 @@ export default {
       return env.TABLE.get(id).fetch(request);
     }
 
-    return new Response('德州扑克联机服务器。房间连接地址：/ws?room=房间号', { status: 404 });
+    return new Response("Texas Hold'em server. Connect a room at /ws?room=CODE", { status: 404 });
   },
 };

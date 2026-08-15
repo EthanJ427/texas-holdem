@@ -17,7 +17,7 @@
       const opts = options || {};
       this.url = opts.url || DEFAULT_URL;
       this.room = (opts.room || 'DEFAULT').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'DEFAULT';
-      this.name = opts.name || '玩家';
+      this.name = opts.name || 'Player';
       this.on = opts.on || {};
 
       this.ws = null;
@@ -49,7 +49,7 @@
       try {
         ws = new WebSocket(url);
       } catch (e) {
-        this.emit('status', { state: 'error', message: '无法建立连接' });
+        this.emit('status', { state: 'error', message: 'could not open a connection' });
         return;
       }
       this.ws = ws;

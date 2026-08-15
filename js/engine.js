@@ -16,7 +16,7 @@
   const Cards = root.PokerCards || (typeof require !== 'undefined' ? require('./cards.js') : null);
 
   const STREETS = ['preflop', 'flop', 'turn', 'river'];
-  const STREET_NAMES = { preflop: '翻牌前', flop: '翻牌', turn: '转牌', river: '河牌' };
+  const STREET_NAMES = { preflop: 'Preflop', flop: 'Flop', turn: 'Turn', river: 'River' };
 
   class HoldemEngine {
     constructor(config) {
@@ -97,15 +97,15 @@
       const toCall = this.toCall(p);
       const actions = [];
 
-      actions.push({ type: 'fold', label: '弃牌' });
+      actions.push({ type: 'fold', label: 'Fold' });
 
       if (toCall === 0) {
-        actions.push({ type: 'check', label: '过牌' });
+        actions.push({ type: 'check', label: 'Check' });
       } else {
         const amount = Math.min(toCall, p.chips);
         actions.push({
           type: 'call',
-          label: amount >= p.chips ? `全下跟注 ${amount}` : `跟注 ${amount}`,
+          label: amount >= p.chips ? `All in ${amount}` : `Call ${amount}`,
           amount,
         });
       }
@@ -116,7 +116,7 @@
         const minTo = Math.min(this.currentBet + this.minRaise, maxTo);
         actions.push({
           type: this.currentBet === 0 ? 'bet' : 'raise',
-          label: this.currentBet === 0 ? '下注' : '加注',
+          label: this.currentBet === 0 ? 'Bet' : 'Raise',
           min: minTo,
           max: maxTo,
         });
@@ -132,7 +132,7 @@
       for (const p of this.players) {
         if (!p.busted && p.chips <= 0) {
           p.busted = true;
-          this.emit('busted', { player: p.id, text: `${p.name} 筹码输光，离开牌桌` });
+          this.emit('busted', { player: p.id, text: `${p.name} is out of chips` });
         }
       }
 
@@ -141,7 +141,7 @@
         this.handOver = true;
         this.emit('game-over', {
           winner: seated.length ? seated[0].id : null,
-          text: seated.length ? `${seated[0].name} 赢下了全部筹码` : '牌局结束',
+          text: seated.length ? `${seated[0].name} takes every chip on the table` : 'Game over',
         });
         return false;
       }
@@ -173,7 +173,7 @@
       this.emit('hand-start', {
         handNumber: this.handNumber,
         button: this.buttonIndex,
-        text: `第 ${this.handNumber} 手 · ${this.players[this.buttonIndex].name} 是庄家`,
+        text: `Hand ${this.handNumber} — ${this.players[this.buttonIndex].name} on the button`,
       });
 
       this.postBlinds();
@@ -192,8 +192,8 @@
       const sbIndex = headsUp ? this.buttonIndex : this.nextSeated(this.buttonIndex);
       const bbIndex = this.nextSeated(sbIndex);
 
-      this.postBlind(this.players[sbIndex], this.smallBlind, '小盲');
-      this.postBlind(this.players[bbIndex], this.bigBlind, '大盲');
+      this.postBlind(this.players[sbIndex], this.smallBlind, 'small blind');
+      this.postBlind(this.players[bbIndex], this.bigBlind, 'big blind');
 
       this.currentBet = this.bigBlind;
       this.minRaise = this.bigBlind;
@@ -209,7 +209,7 @@
       if (player.chips === 0) player.allIn = true;
       this.emit('blind', {
         player: player.id, amount: actual, label,
-        text: `${player.name} 下${label} ${actual}`,
+        text: `${player.name} posts the ${label} ${actual}`,
       });
     }
 
@@ -225,7 +225,7 @@
       for (let round = 0; round < 2; round++) {
         for (const seat of order) this.players[seat].hole.push(this.deck.pop());
       }
-      this.emit('deal-hole', { text: '发底牌' });
+      this.emit('deal-hole', { text: 'Hole cards dealt' });
     }
 
     firstActorPreflop() {
@@ -249,11 +249,11 @@
 
     act(type, amount) {
       const p = this.currentActor();
-      if (!p) throw new Error('现在没有人可以行动');
+      if (!p) throw new Error('nobody can act right now');
 
       const legal = this.legalActions(p);
       const match = legal.find((a) => a.type === type);
-      if (!match) throw new Error(`${p.name} 现在不能 ${type}`);
+      if (!match) throw new Error(`${p.name} cannot ${type} right now`);
 
       switch (type) {
         case 'fold': this.doFold(p); break;
@@ -261,7 +261,7 @@
         case 'call': this.doCall(p); break;
         case 'bet':
         case 'raise': this.doRaise(p, amount, match); break;
-        default: throw new Error('未知动作：' + type);
+        default: throw new Error('unknown action: ' + type);
       }
 
       this.afterAction();
@@ -270,14 +270,14 @@
     doFold(p) {
       p.folded = true;
       p.hasActed = true;
-      p.lastAction = '弃牌';
-      this.emit('action', { player: p.id, action: 'fold', text: `${p.name} 弃牌` });
+      p.lastAction = 'Fold';
+      this.emit('action', { player: p.id, action: 'fold', text: `${p.name} folds` });
     }
 
     doCheck(p) {
       p.hasActed = true;
-      p.lastAction = '过牌';
-      this.emit('action', { player: p.id, action: 'check', text: `${p.name} 过牌` });
+      p.lastAction = 'Check';
+      this.emit('action', { player: p.id, action: 'check', text: `${p.name} checks` });
     }
 
     doCall(p) {
@@ -287,17 +287,17 @@
       p.committed += amount;
       p.hasActed = true;
       if (p.chips === 0) p.allIn = true;
-      p.lastAction = p.allIn ? '全下' : `跟注 ${amount}`;
+      p.lastAction = p.allIn ? 'All in' : `Call ${amount}`;
       this.emit('action', {
         player: p.id, action: 'call', amount,
-        text: p.allIn ? `${p.name} 全下 ${amount}` : `${p.name} 跟注 ${amount}`,
+        text: p.allIn ? `${p.name} is all in for ${amount}` : `${p.name} calls ${amount}`,
       });
     }
 
     doRaise(p, rawTo, legalEntry) {
       // amount 是「加注到」的总额，不是增量
       let target = Math.round(rawTo);
-      if (!Number.isFinite(target)) throw new Error('加注金额无效');
+      if (!Number.isFinite(target)) throw new Error('invalid raise amount');
       target = Math.max(legalEntry.min, Math.min(legalEntry.max, target));
 
       const previousBet = this.currentBet;
@@ -331,11 +331,11 @@
         }
       }
 
-      const verb = previousBet === 0 ? '下注' : '加注到';
-      p.lastAction = p.allIn ? '全下' : `${verb} ${target}`;
+      const verb = previousBet === 0 ? 'Bet' : 'Raise to';
+      p.lastAction = p.allIn ? 'All in' : `${verb} ${target}`;
       this.emit('action', {
         player: p.id, action: legalEntry.type, amount: target,
-        text: p.allIn ? `${p.name} 全下 ${target}` : `${p.name} ${verb} ${target}`,
+        text: p.allIn ? `${p.name} is all in for ${target}` : `${p.name} ${verb.toLowerCase()}s ${target}`,
       });
     }
 
@@ -382,7 +382,7 @@
       this.actorIndex = this.firstActorPostflop();
       this.emit('street', {
         street: next, board: this.board.slice(),
-        text: `${STREET_NAMES[next]}：${this.board.map(Cards.cardName).join(' ')}`,
+        text: `${STREET_NAMES[next]}: ${this.board.map(Cards.cardName).join(' ')}`,
       });
 
       this.checkForAutoAdvance();
@@ -415,7 +415,7 @@
         hands: [],
       };
       this.emit('hand-end', {
-        text: `其他人都弃牌，${winner.name} 赢得 ${amount}`,
+        text: `Everyone folds — ${winner.name} wins ${amount}`,
         result: this.result,
       });
       return this.result;
@@ -516,7 +516,7 @@
         awarded.push({
           amount: pot.amount,
           winners,
-          label: i === 0 ? '主池' : `边池 ${i}`,
+          label: i === 0 ? 'Main pot' : `Side pot ${i}`,
           eligible: pot.eligible,
         });
       }
@@ -530,7 +530,7 @@
         return `${pot.label} ${pot.amount} → ${names}`;
       }).join('；');
 
-      this.emit('showdown', { hands, text: '摊牌' });
+      this.emit('showdown', { hands, text: 'Showdown' });
       this.emit('hand-end', { text: summary, result: this.result });
       return this.result;
     }

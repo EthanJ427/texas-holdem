@@ -27,8 +27,8 @@
   const LEVELS = {
     novice: {
       key: 'novice',
-      name: '新手',
-      blurb: '什么牌都想看看，很少弃牌，也很少加注',
+      name: 'Novice',
+      blurb: 'Plays almost every hand, rarely folds, rarely raises',
       openThreshold: { early: 2, middle: 1, late: 0, blind: 0 },
       callRaise: 1,
       threeBet: 17,
@@ -41,8 +41,8 @@
     },
     intermediate: {
       key: 'intermediate',
-      name: '进阶',
-      blurb: '会算底池赔率，打得中规中矩，偶尔诈唬',
+      name: 'Intermediate',
+      blurb: 'Plays pot odds, solid but unspectacular, bluffs occasionally',
       openThreshold: { early: 8, middle: 7, late: 6, blind: 6.5 },
       callRaise: 7,
       threeBet: 12,
@@ -55,8 +55,8 @@
     },
     expert: {
       key: 'expert',
-      name: '高手',
-      blurb: '算得准、位置感强、该凶的时候很凶，诈唬也挑时机',
+      name: 'Expert',
+      blurb: 'Accurate, positional, aggressive when it counts, picks its bluffs',
       openThreshold: { early: 9, middle: 7.5, late: 5.5, blind: 7 },
       callRaise: 8,
       threeBet: 11,

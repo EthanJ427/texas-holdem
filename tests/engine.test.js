@@ -173,7 +173,7 @@
 
     eq(g.players[0].chips, 200, '一对 A 赢下全部 200');
     eq(g.players[1].chips, 0, '输家一无所获');
-    eq(g.result.hands.find((h) => h.player === 0).description, '一对 A', '摊牌描述正确');
+    eq(g.result.hands.find((h) => h.player === 0).description, 'Pair of As', '摊牌描述正确');
   });
 
   suite('随机对局压力测试（2000 手，六人桌）', () => {

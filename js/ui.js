@@ -52,7 +52,7 @@
   const isNarrow = () => window.innerWidth <= NARROW_BREAKPOINT;
   const seatPositions = () => (isNarrow() ? SEAT_POSITIONS_NARROW : SEAT_POSITIONS);
 
-  const AI_NAMES = ['老陈', '阿杰', '王姐', '小林', '高博'];
+  const AI_NAMES = ['Chen', 'Marcus', 'Nadia', 'Priya', 'Tobias'];
 
   const LEVEL_PRESETS = {
     mixed: ['novice', 'novice', 'intermediate', 'intermediate', 'expert'],
@@ -185,7 +185,7 @@
 
   function buildEngine(config) {
     const levels = LEVEL_PRESETS[config.difficulty] || LEVEL_PRESETS.mixed;
-    const players = [{ name: '你', isHuman: true, chips: config.stack }];
+    const players = [{ name: 'You', isHuman: true, chips: config.stack }];
     for (let i = 0; i < 5; i++) {
       players.push({ name: AI_NAMES[i], level: levels[i], chips: config.stack });
     }
@@ -252,10 +252,10 @@
     if (!view) return;
 
     $('hand-number').textContent = view.handNumber;
-    $('blind-info').textContent = `盲注 ${view.smallBlind}/${view.bigBlind}`;
+    $('blind-info').textContent = `Blinds ${view.smallBlind}/${view.bigBlind}`;
     $('pot-amount').textContent = view.pot;
 
-    const streetNames = { preflop: '翻牌前', flop: '翻牌', turn: '转牌', river: '河牌', showdown: '摊牌' };
+    const streetNames = { preflop: 'Preflop', flop: 'Flop', turn: 'Turn', river: 'River', showdown: 'Showdown' };
     $('street-label').textContent = streetNames[view.street] || '';
 
     // 公共牌
@@ -310,10 +310,10 @@
 
     // 状态标签
     let status = null;
-    if (p.busted) status = { text: '已出局', cls: '' };
-    else if (thinkingId === i) status = { text: '思考中', cls: 'thinking' };
-    else if (p.folded) status = { text: '弃牌', cls: '' };
-    else if (p.allIn) status = { text: '全下', cls: 'allin' };
+    if (p.busted) status = { text: 'Out', cls: '' };
+    else if (thinkingId === i) status = { text: 'Thinking', cls: 'thinking' };
+    else if (p.folded) status = { text: 'Folded', cls: '' };
+    else if (p.allIn) status = { text: 'All in', cls: 'allin' };
     else if (p.lastAction) status = { text: p.lastAction, cls: '' };
 
     if (status) {
@@ -351,7 +351,7 @@
     plate.innerHTML =
       `<div class="plate-name">${p.name}</div>` +
       `<div class="plate-level">${levelName}</div>` +
-      `<div class="plate-chips${p.busted ? ' busted' : ''}">${p.busted ? '出局' : p.chips}</div>`;
+      `<div class="plate-chips${p.busted ? ' busted' : ''}">${p.busted ? 'Out' : p.chips}</div>`;
     seat.appendChild(plate);
 
     // 剩余筹码也画成实物，输光了自然就没了
@@ -490,30 +490,30 @@
     const toCall = view.toCall;
 
     // 提示当前牌型，方便新手判断
-    let prompt = '轮到你了';
+    let prompt = 'Your turn';
     if (view.board.length >= 3 && me.hole) {
       const score = Cards.evaluate(me.hole.concat(view.board));
-      prompt = `轮到你了 · 你现在是 ${Cards.describe(score)}`;
+      prompt = `Your turn — you have ${Cards.describe(score)}`;
     }
-    if (toCall > 0) prompt += ` · 需跟 ${toCall}`;
+    if (toCall > 0) prompt += ` · ${toCall} to call`;
     $('action-prompt').textContent = prompt;
 
     for (const action of legal) {
       if (action.type === 'bet' || action.type === 'raise') {
         const btn = makeActBtn('raise', action.label,
-          action.min >= action.max ? `全下 ${action.max}` : `${action.min} 起`);
+          action.min >= action.max ? `All in ${action.max}` : `${action.min} min`);
         btn.onclick = () => openRaisePanel(action);
         container.appendChild(btn);
       } else if (action.type === 'call') {
-        const btn = makeActBtn('call', '跟注', String(action.amount));
+        const btn = makeActBtn('call', 'Call', String(action.amount));
         btn.onclick = () => submit({ type: 'call' });
         container.appendChild(btn);
       } else if (action.type === 'check') {
-        const btn = makeActBtn('call', '过牌', '不用加钱');
+        const btn = makeActBtn('call', 'Check', 'costs nothing');
         btn.onclick = () => submit({ type: 'check' });
         container.appendChild(btn);
       } else {
-        const btn = makeActBtn('fold', '弃牌', me.committed > 0 ? `放弃已投入的 ${me.committed}` : '');
+        const btn = makeActBtn('fold', 'Fold', me.committed > 0 ? `give up ${me.committed}` : '');
         btn.onclick = () => submit({ type: 'fold' });
         container.appendChild(btn);
       }
@@ -542,10 +542,10 @@
     const presets = $('raise-presets');
     presets.innerHTML = '';
     const options = [
-      { label: '½ 底池', to: view.currentBet + view.pot * 0.5 },
-      { label: '⅔ 底池', to: view.currentBet + view.pot * 0.67 },
-      { label: '1× 底池', to: view.currentBet + view.pot },
-      { label: '全下', to: action.max },
+      { label: '½ pot', to: view.currentBet + view.pot * 0.5 },
+      { label: '⅔ pot', to: view.currentBet + view.pot * 0.67 },
+      { label: 'Pot', to: view.currentBet + view.pot },
+      { label: 'All in', to: action.max },
     ];
     for (const opt of options) {
       const value = Math.round(Math.min(action.max, Math.max(action.min, opt.to)));
@@ -662,17 +662,17 @@
       const names = pot.winners.map((id) => view.players[id].name).join('、');
       if (result.showdown) {
         const info = result.hands.find((h) => h.player === pot.winners[0]);
-        lines.push(`${pot.label} ${pot.amount} → ${names}（${info ? info.description : ''}）`);
+        lines.push(`${pot.label} ${pot.amount} → ${names} (${info ? info.description : ''})`);
       } else {
-        lines.push(`${names} 赢得 ${pot.amount}，其他人都弃牌了`);
+        lines.push(`${names} wins ${pot.amount} — everyone else folded`);
       }
     }
 
     const me = view.players[view.you];
     const delta = me.wonThisHand - me.committed;
-    if (delta > 0) lines.push(`你这手净赢 ${delta}`);
-    else if (delta < 0) lines.push(`你这手净输 ${-delta}`);
-    else if (me.committed > 0) lines.push('你这手打平');
+    if (delta > 0) lines.push(`You won ${delta} this hand`);
+    else if (delta < 0) lines.push(`You lost ${-delta} this hand`);
+    else if (me.committed > 0) lines.push('You broke even this hand');
 
     $('result-text').innerHTML = lines.join('<br>');
     $('result-banner').classList.remove('hidden');
@@ -688,14 +688,14 @@
     $('gameover').classList.remove('hidden');
 
     if (!me.busted && alive.length === 1) {
-      $('gameover-title').textContent = '通吃全场';
+      $('gameover-title').textContent = 'You took it all';
       $('gameover-text').textContent =
-        `你赢下了牌桌上全部 ${me.chips} 筹码，一共打了 ${engine.handNumber} 手。`;
+        `You won every chip on the table — ${me.chips} across ${engine.handNumber} hands.`;
     } else {
-      $('gameover-title').textContent = '你出局了';
+      $('gameover-title').textContent = 'You are out';
       const best = alive.sort((a, b) => b.chips - a.chips)[0];
       $('gameover-text').textContent =
-        `筹码输光，打了 ${engine.handNumber} 手。${best ? `目前筹码最多的是 ${best.name}（${best.chips}）。` : ''}`;
+        `Out of chips after ${engine.handNumber} hands.${best ? ` ${best.name} leads with ${best.chips}.` : ''}`;
     }
     clearSave();
     generation++;   // 让当前循环退出
@@ -743,7 +743,7 @@
     $('game').classList.remove('hidden');
     $('result-banner').classList.add('hidden');
     $('room-info').classList.remove('hidden');
-    $('room-info').textContent = `房间 ${roomCode}`;
+    $('room-info').textContent = `Room ${roomCode}`;
     $('conn-info').classList.remove('hidden');
 
     net = new window.PokerNet.NetClient({
@@ -752,8 +752,8 @@
       on: {
         status: onNetStatus,
         welcome: (d) => {
-          if (d.waiting) appendLog('牌局进行中，你排在下一手入座', 'log-street');
-          else appendLog(`已入座 ${roomCode} 房间`, 'log-hand');
+          if (d.waiting) appendLog('Hand in progress — you are seated next hand', 'log-street');
+          else appendLog(`Seated in room ${roomCode}`, 'log-hand');
         },
         state: onNetState,
         events: onNetEvents,
@@ -768,8 +768,8 @@
   function onNetStatus(s) {
     const el = $('conn-info');
     const label = {
-      connecting: '连接中…', open: '已连接',
-      reconnecting: '断线重连中…', error: '连接失败',
+      connecting: 'Connecting…', open: 'Connected',
+      reconnecting: 'Reconnecting…', error: 'Connection failed',
     }[s.state] || '';
     el.textContent = label;
     el.classList.toggle('bad', s.state === 'reconnecting' || s.state === 'error');
@@ -780,7 +780,7 @@
     view = d.view;
     // you 为 null = 还在等下一手入座，此时是旁观视角
     const waiting = view.you === null || view.you === undefined;
-    $('action-prompt').textContent = waiting ? '牌局进行中，下一手开始时你就入座' : '';
+    $('action-prompt').textContent = waiting ? 'Hand in progress — you are seated next hand' : '';
     // 换手了就把动画状态清空，否则上一手的牌会被当成"已经出现过"
     if (!previous || previous.handNumber !== view.handNumber) {
       displayBoard = [];
@@ -794,7 +794,7 @@
     render();
     // 不该我行动了就把按钮收掉
     if (waiting || view.actorIndex !== view.you || view.handOver) clearActionBar();
-    if (waiting) $('action-prompt').textContent = '牌局进行中，下一手开始时你就入座';
+    if (waiting) $('action-prompt').textContent = 'Hand in progress — you are seated next hand';
   }
 
   function onNetEvents(events) {
@@ -834,7 +834,7 @@
       }
       const left = Math.max(0, net.localDeadline(turnInfo.deadline) - Date.now());
       el.classList.remove('hidden');
-      el.textContent = `${Math.ceil(left / 1000)} 秒`;
+      el.textContent = `${Math.ceil(left / 1000)}s`;
       el.classList.toggle('urgent', left < 10000);
     }, 250);
   }
@@ -862,18 +862,18 @@
       const names = pot.winners.map((id) => view.players[id].name).join('、');
       const info = view.result.hands.find((h) => h.player === pot.winners[0]);
       return view.result.showdown
-        ? `${pot.label} ${pot.amount} → ${names}（${info ? info.description : ''}）`
-        : `${names} 赢得 ${pot.amount}`;
+        ? `${pot.label} ${pot.amount} → ${names} (${info ? info.description : ''})`
+        : `${names} wins ${pot.amount}`;
     });
     const me = view.you === null || view.you === undefined ? null : view.players[view.you];
     if (me) {
       const delta = me.wonThisHand - me.committed;
-      if (delta > 0) lines.push(`你这手净赢 ${delta}`);
-      else if (delta < 0) lines.push(`你这手净输 ${-delta}`);
+      if (delta > 0) lines.push(`You won ${delta} this hand`);
+      else if (delta < 0) lines.push(`You lost ${-delta} this hand`);
     }
     $('result-text').innerHTML = lines.join('<br>');
     $('result-banner').classList.remove('hidden');
-    $('next-hand-btn').textContent = '等待下一手…';
+    $('next-hand-btn').textContent = 'Next hand shortly…';
   }
 
   // ---------- 启动 ----------
@@ -930,8 +930,8 @@
     const soundBtn = $('sound-toggle');
     const paintSoundBtn = () => {
       const on = Sound && Sound.isEnabled();
-      soundBtn.textContent = on ? '🔊 声音' : '🔇 静音';
-      soundBtn.title = on ? '点击静音' : '点击开启声音';
+      soundBtn.textContent = on ? '🔊 Sound' : '🔇 Muted';
+      soundBtn.title = on ? 'Mute' : 'Unmute';
     };
     soundBtn.onclick = () => {
       if (!Sound) return;
@@ -966,7 +966,7 @@
       const code = ($('room-code').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
       const name = ($('player-name').value || '').trim().slice(0, 12);
       if (!code) { $('room-code').focus(); return; }
-      startOnline(code, name || '玩家');
+      startOnline(code, name || 'Player');
     };
     $('room-code').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') $('join-btn').click();
@@ -990,7 +990,7 @@
     btn.style.background = 'linear-gradient(180deg, #4a9d6e, #3a8259)';
     btn.style.color = '#f2ede4';
     const me = data.players.find((p) => p.isHuman);
-    btn.textContent = `继续上次牌局（你还有 ${me.chips} 筹码）`;
+    btn.textContent = `Resume — you have ${me.chips} chips`;
     btn.onclick = () => startGame(restoreEngine(data));
 
     const card = document.querySelector('#setup .setup-card');

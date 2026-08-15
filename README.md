@@ -1,86 +1,107 @@
-# 德州扑克
+# Texas Hold'em
 
-浏览器里的六人桌无限注德州扑克，你对五个电脑对手。原生 HTML/CSS/JS，没有任何依赖，也不需要构建 —— 直接用浏览器打开 `index.html` 就能玩。
+**[▶ Play now](https://ethanj427.github.io/texas-holdem/)** — no install, no signup, works on phones.
 
-## 玩法
+Six-max no-limit hold'em in the browser. Play solo against three tiers of bots, or share a
+room code and deal your friends in. Vanilla HTML/CSS/JS — no dependencies, no build step.
 
-- **六人桌**，你固定坐在下方，五个电脑对手分三个难度档位
-- **无限注**：可以下注到全部筹码，支持全下与边池
-- 起始筹码和盲注可选；筹码输光的人离开牌桌，最后活下来的通吃
-- 进度自动存在浏览器本地，关掉页面下次可以接着打
+---
 
-行动栏提供弃牌 / 过牌 / 跟注 / 加注，加注面板带滑杆和常用尺度（½ 底池、⅔ 底池、1× 底池、全下）。翻牌后会顺带提示你当前的牌型，方便还不熟牌型的人。
+## Play with friends
 
-## 音效
+Click **和朋友联机**, pick a name and a room code, and send that code to whoever you want at
+the table. Empty seats fill with bots, so two people are enough to start.
 
-发牌、翻公共牌、推筹码、敲桌过牌、收底池各有各的声音，顶栏可以一键静音（选择记在本地）。
+- Reconnect where you left off — your seat and stack survive a refresh
+- 60 seconds per decision, then the server checks or folds for you
+- Bots hold the seats until real players arrive
 
-全部用 Web Audio 现场合成，**没有任何音频文件** —— 噪声过带通做牌面摩擦声，三角波扫频叠短噪声做筹码碰撞，低频正弦做敲桌子的闷响。下注越大扔出去的筹码越多、声音越密。这样仓库里没有二进制资源，离线也照样响。
+## The bots
 
-浏览器要求音频必须由用户手势启动，所以点「坐下开打」的那一下才会真正创建 AudioContext。
-
-## 三档电脑对手
-
-| 档位 | 打法 | 实测入池率 | 决策依据 |
+| Tier | Style | Measured VPIP | How it decides |
 |---|---|---|---|
-| 新手 | 什么牌都想看看，很少弃牌，也很少加注 | ~95% | 极低的起手牌门槛，蒙特卡洛模拟 80 次 |
-| 进阶 | 会算底池赔率，中规中矩，偶尔诈唬 | ~28% | Chen 公式 + 250 次模拟 |
-| 高手 | 算得准、位置感强、该凶时很凶 | ~25% | Chen 公式 + 500 次模拟，位置与尺度都会变 |
+| 新手 (Novice) | Calls almost anything, rarely folds | ~95% | Very loose thresholds, 80 simulations |
+| 进阶 (Intermediate) | Plays pot odds, bluffs occasionally | ~28% | Chen formula + 250 simulations |
+| 高手 (Expert) | Positional, aggressive, sizes bets | ~25% | Chen formula + 500 simulations |
 
-（进阶和高手的入池率落在真实六人桌常规牌手的区间内。高手对新手单挑 1500 手的实测优势约为 222 BB/100 —— 对一个「什么牌都跟、几乎不弃牌」的对手来说，这个碾压幅度是合理的。）
+The middle and top tiers land inside the range real six-max regulars play. Head-to-head over
+1500 seeded hands, Expert beats Novice by roughly **222 BB/100** — a crushing margin, which is
+what you would expect against an opponent that never folds.
 
-对手用两件武器做决定：
+Two techniques do the work. Preflop, the [Chen formula](https://www.thepokerbank.com/strategy/basic/starting-hand-selection/chen-formula/)
+scores the starting hand (AA = 20, 72o ≈ -1), adjusted for position and how many players remain —
+ranges widen as the table shrinks, because folding your way through heads-up bleeds you dry.
+Postflop, a Monte Carlo run deals the remaining cards out hundreds of times and counts how often
+the hand wins, which prices draws correctly without any special-casing.
 
-1. **翻牌前**用 [Chen 公式](https://www.thepokerbank.com/strategy/basic/starting-hand-selection/chen-formula/)给起手牌打分（AA = 20 分，72o ≈ -1 分），再按位置和人数调整门槛 —— 人越少范围越宽，单挑还挑三拣四会被盲注磨死。
-2. **翻牌后**跑蒙特卡洛模拟：把剩下的牌随机发完很多次，数自己赢了几次，得到胜率，再和底池赔率比较。这种做法天然把听牌的价值算进去了。
+**The bots cannot see your cards.** They receive the same redacted view a human client gets, in
+which every other player's hole cards are `null`. This is enforced structurally rather than by
+convention, and a test suite watches it.
 
-**电脑对手不会偷看你的牌。** 模拟时对手的手牌是从剩余牌堆里随机抽的，AI 掌握的信息和你完全一样。这一点有专门的测试守着：把对手的底牌换成 KK 或者垃圾牌，AI 的估值必须纹丝不动。
+## Running it
 
-## 目录结构
+Open `index.html` in a browser. That is the whole procedure for solo play.
+
+Online play needs the server in `worker/` deployed to Cloudflare Workers:
+
+```bash
+npm install
+npx wrangler deploy
+```
+
+## Layout
 
 ```
-index.html        牌桌页面
-style.css         全部样式
-js/cards.js       牌的表示、洗牌、牌型评估
-js/engine.js      规则引擎：下注轮、盲注、边池、摊牌
-js/ai.js          电脑对手
-js/sound.js       音效（Web Audio 实时合成，无音频文件）
-js/ui.js          界面与流程控制
-tests/            测试（浏览器里跑）
+index.html        the table
+style.css         all styling, including the 3D perspective
+js/cards.js       card representation, shuffling, 5-7 card evaluation
+js/engine.js      rules: betting rounds, blinds, side pots, showdown
+js/ai.js          the bots
+js/sound.js       Web Audio synthesis — no audio files anywhere
+js/net.js         WebSocket client
+js/room.js        server-side table logic (platform-free, fully tested)
+js/ui.js          rendering and flow
+worker/index.js   Cloudflare Durable Object shell
+tests/            258 assertions, run in a browser
+docs/protocol.md  the wire protocol
 ```
 
-引擎完全不碰界面也不碰 AI，可以单独拿去用：
+`cards.js`, `engine.js`, `ai.js` and `room.js` touch no browser API, so the server reuses them
+unchanged. The engine is usable on its own:
 
 ```js
 const g = new HoldemEngine({ players, smallBlind: 10, bigBlind: 20 });
 g.startHand();
-g.currentActor();      // 该谁行动
-g.legalActions();      // 他能做什么
-g.act('raise', 120);   // 加注「到」120，不是加 120
+g.currentActor();       // whose turn
+g.legalActions();       // what they may do
+g.act('raise', 120);    // raise TO 120, not BY 120
+g.viewFor(seatId);      // redacted snapshot — the only way state leaves the engine
 ```
 
-## 测试
+## Tests
 
-打开 `tests/index.html` 即可运行，共 166 项。除了常规用例，还有几项是专门用来抓真 bug 的：
+Open [`tests/`](https://ethanj427.github.io/texas-holdem/tests/). 258 assertions, no runner to
+install. The ones that earn their keep:
 
-- **牌型评估器 vs 理论概率**：随机发 50 万手七张牌，统计各牌型占比，和已知的数学期望逐项比对（实测各项误差都在千分之几以内）
-- **两千手随机对局**：全程校验筹码守恒、永远不会轮到已弃牌或已全下的人、每手都能正常结束
-- **边池分层**：包括「弃牌者投得比所有还在牌里的人都多」这种会让筹码凭空蒸发的刁钻情形
-- **AI 看不到别人的牌**：把对手底牌换成 KK 或垃圾牌，AI 的胜率估算必须纹丝不动
-- **等级强弱**：高手对新手单挑，三个固定随机种子各打 500 手，合计约 222 BB/100
-- **音效真的出声**：用 `OfflineAudioContext` 把每个音效渲染成波形再测峰值 —— 只验证「函数被调用了」说明不了问题，一个接错线的节点照样一声不响。静音时必须渲染出全零波形
+- **Evaluator vs. theory** — 500,000 random seven-card deals, category frequencies compared against
+  the known mathematical values. Every category lands within a few thousandths of a percent.
+- **2,000-hand fuzz** — chip conservation checked at every step, never acts out of turn, every hand
+  terminates.
+- **Side pots** — including the case where a folded player contributed more than anyone still live,
+  which silently vaporised chips before it was caught.
+- **Redaction** — every view sent to every player is serialised and inspected. A key allowlist means
+  any new field fails the test until it has been reviewed, and reverse controls assert that what
+  *should* be visible is, so an empty return value cannot fake a pass.
+- **Audio brightness** — spectral brightness is bounded on both sides. Each bound came from real
+  feedback: too high was a harsh hiss, too low sounded like knocking on a door.
 
-对局类的测试用固定种子的随机数发生器，结果可复现。这不是洁癖：单跑 400 手时同一份代码在三个种子上分别打出 368、260、38 BB/100，方差大到足以让结论在「碾压」和「基本打平」之间来回跳。
+Game-simulation tests use a seeded PRNG. This is not fussiness: over 400 unseeded hands the same
+code scored 368, 260 and 38 BB/100 on three different seeds — enough variance to flip the
+conclusion between "crushing" and "roughly even".
 
-这些测试也不是摆设 —— 开发过程中它们抓出了三个真 bug：单挑时轮到已经因盲注全下的小盲行动、位置判断把六人桌上每个人都算成早位、以及边池顶层无人认领时筹码凭空消失。
+## Trade-offs
 
-## 部署到 GitHub Pages
-
-仓库 Settings → Pages → Source 选 `main` 分支 `/ (root)`，等一分钟就能通过
-`https://<用户名>.github.io/texas-holdem/` 访问。
-
-## 已知取舍
-
-- 全下金额不足一个完整加注时，已经跟平的玩家只能跟或弃、不能再加注 —— 这条冷门规则实现了，但没有做「重开行动权」的完整追踪
-- 没有计时器、没有牌局回放、没有多人联机
-- 牌桌是单桌现金局的形态，盲注不会随时间上涨
+- Play money only. Real stakes are a regulated, entirely different thing.
+- Room codes are unguarded — anyone who guesses the code joins the table.
+- Collusion is not preventable at the architecture level; it is an operations problem.
+- Blinds do not escalate, so a session runs as a cash game rather than a tournament.

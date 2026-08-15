@@ -18,7 +18,7 @@
   const HoldemEngine = Engine.HoldemEngine;
 
   const SEATS = 6;
-  const BOT_NAMES = ['老陈', '阿杰', '王姐', '小林', '高博'];
+  const BOT_NAMES = ['Chen', 'Marcus', 'Nadia', 'Priya', 'Tobias'];
 
   const DEFAULTS = {
     smallBlind: 10,
@@ -60,7 +60,7 @@
         // 不能按「现有机器人数量」当索引：真人顶掉中间某个机器人后，
         // 数量会和还留在桌上的某个名字撞上，于是出现两个「高博」。
         const used = new Set(this.seats.filter(Boolean).map((s) => s.name));
-        const name = BOT_NAMES.find((n) => !used.has(n)) || `电脑${i}`;
+        const name = BOT_NAMES.find((n) => !used.has(n)) || `Bot ${i}`;
         const botIndex = Math.max(0, BOT_NAMES.indexOf(name));
         this.seats[i] = {
           seat: i,
@@ -166,7 +166,7 @@
           case 'stand': this.onStand(connId, msg); break;
           case 'action': this.onAction(connId, msg, now); break;
           default:
-            this.send(connId, 'error', { code: 'bad_message', message: '不认识的消息类型' }, msg && msg.id);
+            this.send(connId, 'error', { code: 'bad_message', message: 'unknown message type' }, msg && msg.id);
         }
       } catch (e) {
         this.send(connId, 'error', { code: 'internal', message: e.message }, msg && msg.id);
@@ -192,7 +192,7 @@
           if (!waiting) {
             waiting = {
               connId,
-              name: (d.name || '玩家').slice(0, 12),
+              name: (d.name || 'Player').slice(0, 12),
               token: d.token || this.makeToken(),
             };
             this.pending.push(waiting);
@@ -217,12 +217,12 @@
         let index = this.seats.findIndex((s) => !s);
         if (index < 0) index = this.seats.findIndex((s) => s && s.isBot);
         if (index < 0) {
-          this.send(connId, 'error', { code: 'room_full', message: '六个座位都满了' }, msg.id);
+          this.send(connId, 'error', { code: 'room_full', message: 'all six seats are taken' }, msg.id);
           return;
         }
         seat = {
           seat: index,
-          name: (d.name || '玩家').slice(0, 12),
+          name: (d.name || 'Player').slice(0, 12),
           isBot: false,
           level: null,
           chips: this.config.startingChips,
@@ -284,11 +284,11 @@
       const seat = this.seatByConn(connId);
 
       if (!seat) {
-        this.send(connId, 'error', { code: 'bad_token', message: '你不在这张桌子上' }, msg.id);
+        this.send(connId, 'error', { code: 'bad_token', message: 'you are not seated at this table' }, msg.id);
         return;
       }
       if (!this.engine || this.engine.handOver) {
-        this.send(connId, 'error', { code: 'not_your_turn', message: '现在不在牌局中' }, msg.id);
+        this.send(connId, 'error', { code: 'not_your_turn', message: 'no hand in progress' }, msg.id);
         return;
       }
       // 防重放的序号校验必须排在「是不是轮到你」前面。
@@ -296,12 +296,12 @@
       // 但那是巧合：加注会让行动权绕回同一个人，那时唯一挡得住重发的就是序号。
       // 序号才是真正的防线，也是更准确的错误信息。
       if (d.handNumber !== this.engine.handNumber || d.actionSeq !== this.actionSeq) {
-        this.send(connId, 'error', { code: 'stale_action', message: '这一手已经推进了' }, msg.id);
+        this.send(connId, 'error', { code: 'stale_action', message: 'this hand has already moved on' }, msg.id);
         return;
       }
       const actor = this.engine.currentActor();
       if (!actor || actor.id !== seat.seat) {
-        this.send(connId, 'error', { code: 'not_your_turn', message: '还没轮到你' }, msg.id);
+        this.send(connId, 'error', { code: 'not_your_turn', message: 'not your turn' }, msg.id);
         return;
       }
 
@@ -412,7 +412,7 @@
       // 每手重建引擎，座位变动只在手与手之间生效
       this.engine = new HoldemEngine({
         players: this.seats.map((s) => ({
-          name: s ? s.name : '空位',
+          name: s ? s.name : 'Empty',
           isHuman: s ? !s.isBot : false,
           level: s ? s.level : null,
           chips: s ? s.chips : 0,
