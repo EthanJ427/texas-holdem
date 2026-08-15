@@ -1,53 +1,72 @@
-# 当前进度
+# Project status
 
-最后更新：2026-08-11
+Last updated: 2026-08-11
 
-## 线上地址
+## Live
 
 | | |
 |---|---|
-| 游戏 | https://ethanj427.github.io/texas-holdem/ （注意结尾斜杠，全小写） |
-| 联机服务器 | https://holdem.ethan-poker.workers.dev/health |
-| 测试页 | https://ethanj427.github.io/texas-holdem/tests/ |
+| Game | https://ethanj427.github.io/texas-holdem/ (trailing slash, all lowercase) |
+| Server | https://holdem.ethan-poker.workers.dev/health |
+| Tests | https://ethanj427.github.io/texas-holdem/tests/ |
 
-## 已完成
+Both halves must be shipped separately: `git push` updates the page (GitHub Pages rebuilds in
+about a minute), `npx wrangler deploy` updates the server. Pushing only one leaves the client
+and server on different versions.
 
-**单机**：六人桌无限注，三档 AI（新手/进阶/高手），实测高手对新手约 222 BB/100。
-第一人称 3D 牌桌、真实筹码柱、Web Audio 合成音效、本地存档。
+## What exists
 
-**联机**：房间号进桌，空位由机器人补齐，两人也能开打。
-断线重连回原座位，超时 60 秒自动过牌/弃牌，中途进来的人排到下一手入座。
+**Solo** — six-max no-limit, three bot tiers (Novice / Intermediate / Expert, measured at 95% /
+28% / 25% VPIP; Expert beats Novice by ~222 BB/100 over 1500 seeded hands). First-person 3D
+table, chip stacks, Web Audio sound synthesis, localStorage save.
 
-**测试**：258 项，浏览器里跑（这台机器上 Node 只用来装 wrangler，测试不依赖它）。
+**Online** — room codes, bots fill empty seats so two players suffice. Reconnect restores seat
+and stack. 60 seconds per decision, then the server checks or folds. Players arriving mid-hand
+queue and are seated at the start of the next hand.
 
-## 架构要点
+**Tests** — 258 assertions, run in a browser. Node on this machine exists only to install
+wrangler; the tests do not need it.
 
-- `js/engine.js` `js/cards.js` `js/ai.js` `js/room.js` 不依赖浏览器，服务器直接复用
-- **状态离开引擎只有两个出口**，各有一道白名单闸：
-  - `viewFor(id)` → `VIEW_KEYS`
-  - `eventsFor(id, events)` → `EVENT_KEYS`
-- 渲染层统一读「视图」，单机也走同一套裁剪 —— 界面不决定露什么牌，视图给什么画什么
-- 服务器每次发全量状态，不做增量（1~2KB，压缩后约 556 字节）
-- 防重放靠「手牌号 + 动作序号」，序号校验排在「是不是轮到你」之前
-- 洗牌在服务器用 `crypto.getRandomValues`
+## Architecture worth not rediscovering
 
-## 下一步候选（按建议优先级）
+- `js/engine.js`, `js/cards.js`, `js/ai.js`, `js/room.js` touch no browser API — the server
+  reuses them unchanged.
+- **State leaves the engine through exactly two exits**, each with a key allowlist enforced by
+  tests: `viewFor(id)` → `VIEW_KEYS`, `eventsFor(id, events)` → `EVENT_KEYS`. Events carry no
+  card data at all; showdown reveals come through state.
+- Rendering reads a *view*, never the engine. Solo feeds it `engine.viewFor(0)`, online feeds it
+  the server's. The UI does not decide which cards to show — it draws what the view contains, so
+  a rendering mistake cannot expose an unsent hand.
+- Full state is sent on every change, no deltas. ~1–2KB, 556 bytes compressed. Deltas were
+  considered and rejected: a full snapshot is needed anyway for join and reconnect, so deltas
+  would be a second mechanism rather than a replacement.
+- Replay protection is hand number + action sequence. **The sequence check must run before the
+  whose-turn check** — a raise reopens betting to the same player, and there the sequence is the
+  only thing between a double-click and a double charge.
+- Server shuffles with `crypto.getRandomValues`. `Math.random` is predictable.
+- Game-simulation tests use a seeded PRNG; unseeded runs swing 38–368 BB/100 on the same code.
 
-1. **输光后重新买入** —— 联机局现在输光只能干看着，桌子越打越空
-2. **显示谁掉线了** —— 服务器已在发 `connected`，界面还没用上
-3. **等人齐再开局** —— 现在一个人进房就开打，朋友晚来会错过几手
-4. **CI 自动跑测试** —— 现在要手动开浏览器跑测试页
+## Next, roughly in order
 
-暂不做：观战入口、聊天、防串通、盲注上涨、真钱。
+1. **Rebuy after busting** — online, a player who loses their stack can only watch, and the table
+   empties out. The most damaging gap for the intended use.
+2. **Show who has disconnected** — the server already sends `connected`; the UI ignores it, so
+   everyone just waits out the 60 seconds wondering why someone is slow.
+3. **Wait for players before dealing** — one person joining starts the game immediately, so a
+   friend arriving 30 seconds later has already missed hands.
+4. **CI** — tests currently require opening a browser by hand.
+5. **Screenshot in the README** — a visual project with no image on GitHub loses most visitors.
+   Needs a real screenshot committed to the repo.
+6. **Translate code comments to English** — comments throughout `js/` and `tests/` are still
+   Chinese. Large mechanical pass, no user impact; worth its own session.
 
-## 常用命令
+Deliberately not doing: spectator entry, chat, anti-collusion, escalating blinds, real money.
+
+## Commands
 
 ```bash
 cd /Users/ethan/texas-holdem
-npx wrangler deploy      # 部署联机服务器
-npx wrangler whoami      # 确认 Cloudflare 授权还在
-git push origin main     # 推送后 GitHub Pages 约一分钟自动更新
+npx wrangler deploy      # ship the server
+npx wrangler whoami      # check Cloudflare auth is still valid
+git push origin main     # ship the page
 ```
-
-改完记得**两边都要发**：网页端走 git push，服务器端走 wrangler deploy。
-只推一边会出现界面和服务器版本不一致。

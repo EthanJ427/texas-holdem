@@ -9,7 +9,7 @@ room code and deal your friends in. Vanilla HTML/CSS/JS — no dependencies, no 
 
 ## Play with friends
 
-Click **和朋友联机**, pick a name and a room code, and send that code to whoever you want at
+Click **Play with friends**, pick a name and a room code, and send that code to whoever you want at
 the table. Empty seats fill with bots, so two people are enough to start.
 
 - Reconnect where you left off — your seat and stack survive a refresh
@@ -18,11 +18,15 @@ the table. Empty seats fill with bots, so two people are enough to start.
 
 ## The bots
 
+*VPIP is the share of hands a player voluntarily puts money into preflop — calling or raising,
+with the forced blinds excluded. It is the standard measure of how loose someone plays: a tight
+regular sits around 22–28%, a habitual caller runs past 60%.*
+
 | Tier | Style | Measured VPIP | How it decides |
 |---|---|---|---|
-| 新手 (Novice) | Calls almost anything, rarely folds | ~95% | Very loose thresholds, 80 simulations |
-| 进阶 (Intermediate) | Plays pot odds, bluffs occasionally | ~28% | Chen formula + 250 simulations |
-| 高手 (Expert) | Positional, aggressive, sizes bets | ~25% | Chen formula + 500 simulations |
+| Novice | Calls almost anything, rarely folds | ~95% | Very loose thresholds, 80 simulations |
+| Intermediate | Plays pot odds, bluffs occasionally | ~28% | Chen formula + 250 simulations |
+| Expert | Positional, aggressive, sizes bets | ~25% | Chen formula + 500 simulations |
 
 The middle and top tiers land inside the range real six-max regulars play. Head-to-head over
 1500 seeded hands, Expert beats Novice by roughly **222 BB/100** — a crushing margin, which is
