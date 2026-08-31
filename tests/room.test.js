@@ -490,6 +490,63 @@
     eq(unknown.join(','), '', '没有白名单之外的字段');
   });
 
+  suite('状态里带着当前行动人的截止时刻', () => {
+    // turn 消息只发给行动人本人，别人拿不到 deadline —— 于是桌上其他人
+    // 干等六十秒，不知道是在想还是掉线了。这份信息得走 state。
+    // 放在房间层而不是 view 里：引擎里没有时钟。
+    const room = makeRoom({ turnSeconds: 60 });
+    room.handle('c1', { t: 'join', id: 1, d: { name: 'A' } }, 0);
+    room.handle('c2', { t: 'join', id: 2, d: { name: 'B' } }, 0);
+
+    let human = null;      // 轮到真人时发出的那份 state
+    let bot = null;        // 轮到机器人时的
+    let now = 0;
+    for (let i = 0; i < 3000 && (!human || !bot); i++) {
+      const out = room.tick(now);
+      const a = room.engine && !room.engine.handOver && room.engine.currentActor();
+      const states = pick(out, 'state');
+      if (a && states.length) {
+        if (room.seats[a.id].isBot) bot = bot || { msg: states[0], at: now };
+        else human = human || { msg: states[0], at: now };
+      }
+      if (a && !room.seats[a.id].isBot) {
+        room.handle(room.seats[a.id].connId, {
+          t: 'action', id: 700 + i,
+          d: { handNumber: room.engine.handNumber, actionSeq: room.actionSeq, type: 'fold' },
+        }, now);
+      }
+      now += 50;
+    }
+
+    ok(human, '抓到了轮到真人时发出的状态');
+    eq(human.msg.d.deadline, human.at + 60000, '截止时刻是这一位的，正好六十秒后');
+    ok(bot, '也抓到了轮到机器人时的状态');
+    eq(bot.msg.d.deadline, null, '机器人不占时钟，deadline 为空');
+  });
+
+  suite('掉线立刻推给其他人', () => {
+    // 不推的话要等下一次有人行动才更新，而掉的偏偏常常就是当前行动人 ——
+    // 那六十秒里桌上谁也不知道他已经不在了，正好是最需要这条信息的时候。
+    const room = makeRoom();
+    const wA = firstOf(room.handle('c1', { t: 'join', id: 1, d: { name: 'A' } }, 0), 'welcome');
+    const wB = firstOf(room.handle('c2', { t: 'join', id: 2, d: { name: 'B' } }, 0), 'welcome');
+    runUntil(room, 0, (r) => r.engine && !r.engine.handOver, 50);
+
+    const out = room.disconnect('c1');
+    const toB = out.filter((o) => o.to === 'c2' && o.msg.t === 'state');
+    eq(toB.length, 1, 'B 当场收到一份新状态');
+    eq(toB[0].msg.d.seats[wA.d.you].connected, false, '里面写着 A 掉线了');
+    eq(toB[0].msg.d.seats[wB.d.you].connected, true, 'B 自己还在线');
+    ok(toB[0].msg.d.seats.filter((s) => s.isBot).every((s) => s.connected), '机器人永远算在线');
+    eq(out.filter((o) => o.to === 'c1').length, 0, '不往已经断掉的连接上发');
+
+    // 回来的时候同样要让别人知道
+    const back = room.handle('c9', { t: 'join', id: 5, d: { name: 'A', token: wA.d.token } }, 1000);
+    const backToB = back.filter((o) => o.to === 'c2' && o.msg.t === 'state');
+    ok(backToB.length >= 1, '重连也推给了 B');
+    eq(backToB[0].msg.d.seats[wA.d.you].connected, true, 'B 那边的「已断线」该摘掉了');
+  });
+
   suite('筹码在手与手之间正确结转', () => {
     const room = makeRoom({ handGapMs: 0 });
     room.handle('c1', { t: 'join', id: 1, d: { name: '老王' } }, 0);

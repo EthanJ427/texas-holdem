@@ -67,7 +67,7 @@ js/net.js         WebSocket client
 js/room.js        server-side table logic (platform-free, fully tested)
 js/ui.js          rendering and flow
 worker/index.js   Cloudflare Durable Object shell
-tests/            287 assertions, run in a browser
+tests/            298 assertions, run in a browser
 docs/protocol.md  the wire protocol
 ```
 
@@ -85,7 +85,7 @@ g.viewFor(seatId);      // redacted snapshot — the only way state leaves the e
 
 ## Tests
 
-Open [`tests/`](https://ethanj427.github.io/texas-holdem/tests/). 287 assertions, no runner to
+Open [`tests/`](https://ethanj427.github.io/texas-holdem/tests/). 298 assertions, no runner to
 install. The ones that earn their keep:
 
 - **Evaluator vs. theory** — 500,000 random seven-card deals, category frequencies compared against

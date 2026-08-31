@@ -466,6 +466,9 @@ button { font-family: inherit; cursor: pointer; }
 }
 .seat-status.allin { background: var(--danger); color: #fff; }
 .seat-status.thinking { background: var(--gold); color: #2a1d0b; }
+.seat-status.offline { background: #4a2f2f; color: #f0c6c0; }
+/* 最后十秒。写在后面，盖掉上面 thinking / offline 的底色 */
+.seat-status.urgent { background: var(--danger); color: #fff; }
 
 /* 座位前推出去的下注筹码 */
 .seat-bet {

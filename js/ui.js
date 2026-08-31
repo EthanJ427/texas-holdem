@@ -116,6 +116,7 @@
   let turnInfo = null;    // 联机时服务器给的本回合信息（含截止时刻）
   let seatInfo = null;    // 联机时服务器给的座位表（谁在线、谁排着补码）；单机为 null
   let rebuyPending = false;   // 已经申请补码，等下一手到账
+  let roomDeadline = null;    // 联机时当前行动人的截止时刻（所有人都收到，不只行动人）
   let countdownTimer = null;
   let displayBoard = [];
   let revealAll = false;
@@ -298,9 +299,27 @@
     seats.appendChild(dealer);
   }
 
+  /** 当前行动人还剩几秒。机器人没有截止时刻，返回 null */
+  function actingSecondsLeft() {
+    if (!isOnline() || !net || roomDeadline === null || roomDeadline === undefined) return null;
+    return Math.max(0, Math.ceil((net.localDeadline(roomDeadline) - Date.now()) / 1000));
+  }
+
+  /** 座位上那行字。渲染时写一次，之后每 250ms 由 tickActingSeat 改秒数，两边共用这里 */
+  function tickLabel(base, secs) {
+    if (secs === null) return base;
+    return base === 'Offline' ? `Offline · ${secs}s` : `${base} ${secs}s`;
+  }
+
   /** 这个座位是不是排着补码。只有联机才有这份数据，单机恒为 false */
   function rebuyingAt(i) {
     return !!(seatInfo && seatInfo[i] && seatInfo[i].rebuyPending);
+  }
+
+  /** 这个位置上的真人是不是掉线了。机器人和空位都不算 */
+  function offlineAt(i) {
+    const s = seatInfo && seatInfo[i];
+    return !!(s && s.name && !s.isBot && !s.connected);
   }
 
   function seatEl(p, i) {
@@ -315,10 +334,19 @@
     seat.style.left = pos.left + '%';
     seat.style.top = pos.top + '%';
 
-    // 状态标签
+    // 状态标签。联机时这行字是「怎么没动静」的唯一解释：
+    // 谁在想、还剩几秒、谁掉线了。单机不需要，那边节奏由本地循环控制。
+    const waitingOn = isOnline() && view.actorIndex === i && i !== view.you && !view.handOver;
+    const secs = waitingOn ? actingSecondsLeft() : null;
+
     let status = null;
     if (p.busted) status = { text: rebuyingAt(i) ? 'Rebuying' : 'Out', cls: '' };
+    // 掉线的人照样在走秒 —— 说清楚是「他不在」而不是「他在想」，
+    // 剩下的秒数就是服务器替他过牌/弃牌之前还要等多久
+    else if (waitingOn && offlineAt(i)) status = { base: 'Offline', cls: 'offline' };
+    else if (waitingOn) status = { base: 'Thinking', cls: 'thinking' };
     else if (thinkingId === i) status = { text: 'Thinking', cls: 'thinking' };
+    else if (offlineAt(i)) status = { text: 'Offline', cls: 'offline' };
     else if (p.folded) status = { text: 'Folded', cls: '' };
     else if (p.allIn) status = { text: 'All in', cls: 'allin' };
     else if (p.lastAction) status = { text: p.lastAction, cls: '' };
@@ -326,7 +354,13 @@
     if (status) {
       const s = document.createElement('div');
       s.className = 'seat-status ' + status.cls;
-      s.textContent = status.text;
+      if (status.base) {
+        s.dataset.tick = status.base;          // 交给 tickActingSeat 每秒改
+        s.textContent = tickLabel(status.base, secs);
+        if (secs !== null && secs <= 10) s.classList.add('urgent');
+      } else {
+        s.textContent = status.text;
+      }
       seat.appendChild(s);
     }
 
@@ -742,6 +776,7 @@
     turnInfo = null;
     seatInfo = null;
     rebuyPending = false;
+    roomDeadline = null;
     humanResolve = null;
     displayBoard = [];
     shownKeys = new Set();
@@ -791,6 +826,7 @@
     const previous = view;
     view = d.view;
     seatInfo = d.seats || null;
+    roomDeadline = d.deadline === undefined ? null : d.deadline;
     // you 为 null = 还在等下一手入座，此时是旁观视角
     const waiting = view.you === null || view.you === undefined;
     // 补码状态只认「服务器说排着」和「筹码回来了」这两个信号，
@@ -868,10 +904,24 @@
     $('countdown').classList.add('hidden');
   }
 
+  /**
+   * 走秒。只改座位上那一行字，不重新渲染整张桌子 ——
+   * render() 是整块重建 DOM 的，每 250ms 来一次会把发牌动画掐断。
+   */
+  function tickActingSeat() {
+    const el = document.querySelector('#seats .seat-status[data-tick]');
+    if (!el) return;
+    const secs = actingSecondsLeft();
+    el.textContent = tickLabel(el.dataset.tick, secs);
+    el.classList.toggle('urgent', secs !== null && secs <= 10);
+  }
+
   /** 倒计时按服务器给的截止时刻走，本地时钟偏移已经在 net 里校正过 */
   function startCountdown() {
     if (countdownTimer) clearInterval(countdownTimer);
     countdownTimer = setInterval(() => {
+      tickActingSeat();
+
       const el = $('countdown');
       if (!isOnline() || !turnInfo || !view || view.actorIndex !== view.you || view.handOver) {
         el.classList.add('hidden');
@@ -890,6 +940,7 @@
     turnInfo = null;
     seatInfo = null;
     rebuyPending = false;
+    roomDeadline = null;
     $('room-info').classList.add('hidden');
     $('conn-info').classList.add('hidden');
   }

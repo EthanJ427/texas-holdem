@@ -125,6 +125,10 @@
           view: this.engine.viewFor(s.seat),
           actionSeq: this.actionSeq,
           seats: this.seatSummary(),
+          // 当前行动人的截止时刻，所有人都要，不只是他自己 ——
+          // 别人得知道这个位置还剩多少秒，否则干等六十秒毫无解释。
+          // 放在房间层而不是 view 里：引擎里没有时钟，view 是纯对局状态。
+          deadline: this.deadline,
         });
       }
     }
@@ -223,6 +227,7 @@
             view: this.engine.viewFor(null),
             actionSeq: this.actionSeq,
             seats: this.seatSummary(),
+            deadline: this.deadline,
           });
           return;
         }
@@ -265,12 +270,9 @@
       }, msg.id);
 
       if (this.engine) {
-        // 重连的人立刻拿一份完整状态，不需要重放历史
-        this.send(connId, 'state', {
-          view: this.engine.viewFor(seat.seat),
-          actionSeq: this.actionSeq,
-          seats: this.seatSummary(),
-        });
+        // 重连的人立刻拿一份完整状态，不需要重放历史。
+        // 推给所有人而不只是他自己：别人桌上那个「已断线」的标记该摘掉了。
+        this.pushState();
         this.pushTurn();
       } else if (this.nextHandAt === null) {
         this.nextHandAt = now;      // 人齐了就可以开牌
@@ -333,6 +335,9 @@
       if (seat) {
         seat.connId = null;
         seat.connected = false;
+        // 立刻告诉桌上其他人。不推的话，要等到下一次有人行动才更新 ——
+        // 而掉线的偏偏常常就是当前行动人，那六十秒里谁也不知道他已经不在了。
+        this.pushState();
       }
       return this.outbox;
     }
@@ -418,16 +423,23 @@
       this.afterEngineStep(now);
     }
 
-    /** 引擎前进一步之后统一处理：发事件、发状态、安排下一个行动人 */
+    /**
+     * 引擎前进一步之后统一处理：发事件、安排下一个行动人、发状态。
+     *
+     * 顺序要紧：state 里带着当前行动人的截止时刻，得先 scheduleActor 定好，
+     * 否则发出去的是上一位的时刻，别人看到的倒计时就是错的。
+     * 收手时同理 —— 先 endHand 把时刻清掉（顺带把筹码结转到座位上），再发最后一份 state。
+     */
     afterEngineStep(now) {
       this.pushEvents();
-      this.pushState();
 
       if (this.engine.handOver) {
         this.endHand(now);
+        this.pushState();
         return;
       }
       this.scheduleActor(now);
+      this.pushState();
       this.pushTurn();
     }
 
@@ -501,8 +513,8 @@
       }
 
       this.pushEvents();
+      this.scheduleActor(now);      // 先定好截止时刻，state 里那份才是这一位的
       this.pushState();
-      this.scheduleActor(now);
       this.pushTurn();
     }
 
