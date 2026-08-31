@@ -1,17 +1,28 @@
 /* ---------- 基础 ---------- */
 
 :root {
-  --felt: #1d6b4a;
-  --felt-dark: #14523a;
-  --rail: #3a2418;
-  --rail-light: #5c3a26;
-  --gold: #d9b26a;
-  --ink: #f2ede4;
-  --muted: #9aa5a0;
-  --bg: #0e1512;
-  --panel: #18211d;
-  --danger: #c8553d;
-  --good: #4a9d6e;
+  /* 浅色牌桌。深色版本留在 git 历史里，换回去就是把这一段调回来 ——
+     底下的规则一律走变量，没有再散落的硬编码颜色。 */
+  --felt: #e6e4de;          /* 桌面 */
+  --felt-dark: #dbd8d1;     /* 桌面外圈，做一点点球面感 */
+  --rail: #c6c1b7;          /* 桌沿 */
+  --rail-light: #e9e6e0;
+  --gold: #a8813f;          /* 强调色：庄家按钮、底池、当前行动人 */
+  --gold-soft: #d9c9a4;
+  --ink: #1d1d1b;
+  --muted: #7a7973;
+  --bg: #fcfcfb;
+  --panel: #ffffff;
+  --surface: #ffffff;       /* 按钮、名牌 */
+  --surface-2: #f1f0ec;     /* 次级底：悬停、预设按钮 */
+  --line: #e4e2dd;          /* 常规描边 */
+  --line-strong: #cbc7bf;   /* 需要看得见的描边 */
+  --danger: #bf4436;
+  --good: #3d8b60;
+  /* 牌背底色。奶油色的 A\ 是烧进 .card.back 那段 SVG 里的。
+     想换成品牌那个正向配色（奶油底 + 黑标记），把这里改成 #f0eee6，
+     再把那段 data URI 里的 fill 改成 %231a1917。 */
+  --card-back: #1a1917;
 
   --card-w: 46px;
   --card-h: 66px;
@@ -51,7 +62,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 #setup, #gameover {
-  background: radial-gradient(ellipse at 50% 30%, #1c2b24 0%, var(--bg) 70%);
+  background: radial-gradient(ellipse at 50% 30%, #ffffff 0%, var(--bg) 70%);
   z-index: 40;
   overflow-y: auto;
 }
@@ -60,10 +71,10 @@ button { font-family: inherit; cursor: pointer; }
   width: 100%;
   max-width: 420px;
   background: var(--panel);
-  border: 1px solid #2b3833;
+  border: 1px solid var(--line);
   border-radius: 18px;
   padding: 32px 28px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+  box-shadow: 0 16px 40px rgba(90, 86, 78, .16);
 }
 
 .setup-card h1 {
@@ -94,8 +105,8 @@ button { font-family: inherit; cursor: pointer; }
   width: 100%;
   padding: 11px 12px;
   border-radius: 10px;
-  border: 1px solid #33413b;
-  background: #101815;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
   color: var(--ink);
   font-size: 14px;
   font-family: inherit;
@@ -147,8 +158,8 @@ button { font-family: inherit; cursor: pointer; }
 .blind-info { margin-left: 14px; }
 
 .ghost-btn {
-  background: transparent;
-  border: 1px solid #33413b;
+  background: var(--surface);
+  border: 1px solid var(--line);
   color: var(--muted);
   padding: 5px 12px;
   border-radius: 7px;
@@ -215,19 +226,20 @@ button { font-family: inherit; cursor: pointer; }
   /* 跑道形：左右两端是半圆，上下是直边。用百分比的话会变成正椭圆，太圆。 */
   border-radius: 999px;
   background:
-    radial-gradient(ellipse at 50% 42%, #2a8159 0%, var(--felt) 45%, var(--felt-dark) 100%);
+    radial-gradient(ellipse at 50% 42%, #f3f2ee 0%, var(--felt) 48%, var(--felt-dark) 100%);
   border: 13px solid var(--rail);
+  /* 浅色下阴影要轻得多，照搬深色那套会糊成一团灰 */
   box-shadow:
-    0 0 0 2px #22150e,
-    inset 0 0 60px rgba(0, 0, 0, .45),
-    0 26px 60px rgba(0, 0, 0, .55);
+    0 0 0 1px var(--line-strong),
+    inset 0 0 50px rgba(120, 116, 108, .10),
+    0 18px 40px rgba(90, 86, 78, .16);
 }
 
 /* 桌面内圈的装饰线 */
 .felt::after {
   inset: 6%;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, .07);
+  border: 1px solid rgba(0, 0, 0, .05);
 }
 
 /*
@@ -262,13 +274,14 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: baseline;
   gap: 7px;
-  background: rgba(0, 0, 0, .32);
-  padding: 4px 14px;
+  background: var(--ink);
+  padding: 4px 15px;
   border-radius: 20px;
-  border: 1px solid rgba(217, 178, 106, .25);
+  border: none;
+  box-shadow: 0 2px 8px rgba(80, 76, 68, .22);
 }
-.pot-label { font-size: 11px; color: var(--gold); letter-spacing: 1px; }
-.pot-amount { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pot-label { font-size: 11px; color: var(--gold-soft); letter-spacing: 1px; }
+.pot-amount { font-size: 17px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
 
 /* 公共牌同样立在桌面上，和底牌保持一致的姿态 */
 .board {
@@ -281,14 +294,14 @@ button { font-family: inherit; cursor: pointer; }
 
 .board .card {
   transform: rotateX(var(--tilt)) translateZ(4px);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .25);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .10), 0 2px 5px rgba(90, 86, 78, .18);
 }
 
 .board .card.winning { transform: rotateX(var(--tilt)) translateZ(14px); }
 
 .street-label {
   font-size: 11px;
-  color: rgba(255, 255, 255, .4);
+  color: var(--muted);
   letter-spacing: 2px;
   height: 14px;
 }
@@ -299,7 +312,7 @@ button { font-family: inherit; cursor: pointer; }
   width: var(--card-w);
   height: var(--card-h);
   border-radius: 5px;
-  background: #fbfaf7;
+  background: #ffffff;
   color: #1b1b1b;
   display: flex;
   flex-direction: column;
@@ -307,7 +320,7 @@ button { font-family: inherit; cursor: pointer; }
   justify-content: center;
   font-weight: 700;
   line-height: 1;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
+  box-shadow: 0 1px 4px rgba(90, 86, 78, .22), 0 0 0 1px rgba(0, 0, 0, .04);
   position: relative;
   flex: 0 0 auto;
 }
@@ -333,16 +346,23 @@ button { font-family: inherit; cursor: pointer; }
 .card.black { color: #1b1b1b; }
 
 .card.back {
-  background:
-    repeating-linear-gradient(45deg, #7d1f2b 0 5px, #63161f 5px 10px);
-  border: 2px solid #f2ede4;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, .45);
+  background-color: var(--card-back);
+  background-image: url('data:image/svg+xml,<svg xmlns="http%3A//www.w3.org/2000/svg" viewBox="0 0 88 100"><path fill="%23F0EEE6" d="M6,78 L26,22 L40,22 L60,78 L46,78 L33,40 L20,78 Z M24,57 L42,57 L42,68 L24,68 Z M48,22 L62,22 L82,78 L68,78 Z"/></svg>');
+  background-size: 62% auto;
+  background-position: center;
+  background-repeat: no-repeat;
+  border: 2px solid #ffffff;
+  box-shadow:
+    /* 牌背内圈那道细线，正经扑克牌都有 */
+    inset 0 0 0 1px rgba(240, 238, 230, .20),
+    0 1px 4px rgba(90, 86, 78, .28),
+    0 0 0 1px rgba(0, 0, 0, .06);
 }
 
 .card.dimmed { filter: brightness(.55) saturate(.5); }
 
 .card.winning {
-  box-shadow: 0 0 0 2px var(--gold), 0 4px 14px rgba(217, 178, 106, .5);
+  box-shadow: 0 0 0 2px var(--gold), 0 4px 14px rgba(168, 129, 63, .35);
   transform: translateY(-4px);
 }
 
@@ -411,27 +431,53 @@ button { font-family: inherit; cursor: pointer; }
 
 .plate {
   width: 100%;
-  background: rgba(10, 16, 13, .82);
-  border: 1px solid #2f3c36;
-  border-radius: 9px;
-  padding: 5px 8px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: #ffffff;
+  border: 1px solid #bdb8ae;
+  border-radius: 999px;
+  padding: 4px 10px 4px 4px;
+  text-align: left;
+  box-shadow: 0 2px 6px rgba(80, 76, 68, .18);
   transition: border-color .2s, box-shadow .2s;
+}
+
+.plate-text { min-width: 0; flex: 1 1 auto; }
+
+/*
+ * 头像不存图片：名字算出色相，画个渐变加首字母。
+ * 同一个人在所有人屏幕上都一样，服务器不用参与。
+ */
+.avatar {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .28);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35);
 }
 
 .seat.acting .plate {
   border-color: var(--gold);
-  box-shadow: 0 0 14px rgba(217, 178, 106, .45);
+  box-shadow: 0 0 0 2px var(--gold-soft), 0 2px 10px rgba(168, 129, 63, .30);
 }
 
 .seat.winner .plate {
   border-color: var(--good);
-  box-shadow: 0 0 18px rgba(74, 157, 110, .55);
+  box-shadow: 0 0 0 2px rgba(61, 139, 96, .35), 0 2px 12px rgba(61, 139, 96, .28);
 }
 
 .plate-name {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -446,7 +492,7 @@ button { font-family: inherit; cursor: pointer; }
 .plate-chips {
   font-size: 13px;
   font-weight: 700;
-  color: var(--gold);
+  color: #8a6b2f;
   font-variant-numeric: tabular-nums;
 }
 
@@ -461,14 +507,16 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: 10px;
   letter-spacing: 1px;
   white-space: nowrap;
-  background: #2b3833;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
   color: var(--muted);
+  box-shadow: 0 1px 2px rgba(90, 86, 78, .12);
 }
-.seat-status.allin { background: var(--danger); color: #fff; }
-.seat-status.thinking { background: var(--gold); color: #2a1d0b; }
-.seat-status.offline { background: #4a2f2f; color: #f0c6c0; }
+.seat-status.allin { background: var(--danger); border-color: var(--danger); color: #fff; }
+.seat-status.thinking { background: var(--gold); border-color: var(--gold); color: #fff; }
+.seat-status.offline { background: #6b6a66; border-color: #6b6a66; color: #fff; }
 /* 最后十秒。写在后面，盖掉上面 thinking / offline 的底色 */
-.seat-status.urgent { background: var(--danger); color: #fff; }
+.seat-status.urgent { background: var(--danger); border-color: var(--danger); color: #fff; }
 
 /* 座位前推出去的下注筹码 */
 .seat-bet {
@@ -479,7 +527,7 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 11px;
   font-weight: 700;
   color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, .9);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -574,21 +622,21 @@ button { font-family: inherit; cursor: pointer; }
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: linear-gradient(180deg, #fff, #d6d1c6);
-  color: #1b1b1b;
+  background: var(--ink);
+  color: #ffffff;
   font-size: 10px;
   font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, .5);
+  box-shadow: 0 1px 3px rgba(90, 86, 78, .28);
 }
 
 /* 摊牌时的牌型说明 */
 .seat-handinfo {
   font-size: 10px;
   color: var(--gold);
-  background: rgba(0, 0, 0, .6);
+  background: rgba(255, 255, 255, .88);
   padding: 1px 7px;
   border-radius: 8px;
   white-space: nowrap;
@@ -623,20 +671,20 @@ button { font-family: inherit; cursor: pointer; }
   max-width: 190px;
   padding: 13px 10px;
   border-radius: 10px;
-  border: 1px solid #33413b;
-  background: #1b2621;
+  border: 1px solid var(--line);
+  background: var(--surface);
   color: var(--ink);
   font-size: 14px;
   font-weight: 600;
   transition: background .15s, border-color .15s, transform .08s;
 }
-.act-btn:hover { background: #24322b; border-color: #4a5a53; }
+.act-btn:hover { background: var(--surface-2); border-color: var(--line-strong); }
 .act-btn:active { transform: translateY(1px); }
 
-.act-btn.fold  { border-color: #4a2b26; }
-.act-btn.fold:hover  { background: #2d1c19; border-color: var(--danger); }
-.act-btn.call  { border-color: #2c4438; }
-.act-btn.call:hover  { background: #1c3128; border-color: var(--good); }
+.act-btn.fold  { border-color: #e6cdc8; }
+.act-btn.fold:hover  { background: #fbeeeb; border-color: var(--danger); }
+.act-btn.call  { border-color: #cfe2d6; }
+.act-btn.call:hover  { background: #edf6f0; border-color: var(--good); }
 .act-btn.raise {
   background: linear-gradient(180deg, #e0bc78, #c69a52);
   color: #2a1d0b;
@@ -656,7 +704,7 @@ button { font-family: inherit; cursor: pointer; }
 .raise-panel {
   margin-top: 10px;
   background: var(--panel);
-  border: 1px solid #2b3833;
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 12px;
 }
@@ -672,8 +720,8 @@ button { font-family: inherit; cursor: pointer; }
   padding: 7px 4px;
   font-size: 11px;
   border-radius: 7px;
-  border: 1px solid #33413b;
-  background: #101815;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
   color: var(--muted);
   transition: border-color .15s, color .15s;
 }
@@ -691,7 +739,7 @@ button { font-family: inherit; cursor: pointer; }
   appearance: none;
   height: 5px;
   border-radius: 3px;
-  background: #2b3833;
+  background: var(--line);
   outline: none;
 }
 #raise-slider::-webkit-slider-thumb {
@@ -700,7 +748,7 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: 50%;
   background: var(--gold);
   cursor: grab;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+  box-shadow: 0 2px 8px rgba(90, 86, 78, .20);
 }
 #raise-slider::-moz-range-thumb {
   width: 20px; height: 20px;
@@ -734,11 +782,11 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: center;
   gap: 16px;
-  background: rgba(16, 24, 20, .96);
+  background: var(--panel);
   border: 1px solid var(--gold);
   border-radius: 14px;
   padding: 12px 16px;
-  box-shadow: 0 16px 44px rgba(0, 0, 0, .6);
+  box-shadow: 0 12px 34px rgba(90, 86, 78, .20);
   max-width: calc(100vw - 32px);
   animation: banner-in .25s ease-out;
 }
@@ -758,7 +806,7 @@ button { font-family: inherit; cursor: pointer; }
   right: 0; top: 0; bottom: 0;
   width: 290px;
   background: var(--panel);
-  border-left: 1px solid #2b3833;
+  border-left: 1px solid var(--line);
   z-index: 35;
   display: flex;
   flex-direction: column;
@@ -772,7 +820,7 @@ button { font-family: inherit; cursor: pointer; }
   justify-content: space-between;
   align-items: center;
   padding: 12px 14px;
-  border-bottom: 1px solid #2b3833;
+  border-bottom: 1px solid var(--line);
   font-size: 13px;
   color: var(--gold);
 }
@@ -790,7 +838,7 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--gold);
   margin-top: 12px;
   padding-top: 8px;
-  border-top: 1px solid #26312c;
+  border-top: 1px solid var(--line);
 }
 .log-body .log-hand:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
 .log-body .log-street { color: #7e8c85; }
@@ -802,12 +850,23 @@ button { font-family: inherit; cursor: pointer; }
   /* 竖屏纵向本来就紧张，倾角要收一些，否则近端的座位会顶出屏幕 */
   :root { --card-w: 34px; --card-h: 49px; --tilt: 26deg; }
   .seat { width: 92px; }
-  .plate { padding: 4px 5px; }
+  .plate { padding: 3px 6px 3px 3px; gap: 5px; }
+  .avatar { width: 22px; height: 22px; font-size: 11px; }
+  /* 窄屏放不下「手数 + 盲注 + 三个按钮」一整行，之前挤成两行还互相压着。
+     字号收一点、按钮贴紧，一行就够了。 */
+  .topbar { padding: 8px 10px; font-size: 11px; gap: 8px; }
+  .topbar b { font-size: 12px; }
+  .blind-info { margin-left: 8px; }
+  .ghost-btn { padding: 4px 8px; font-size: 11px; margin-left: 5px; }
   .plate-name { font-size: 11px; }
   .plate-chips { font-size: 12px; }
   /* 竖屏倾角只有 26°，近端撑开得少，宽度可以放回来 */
   .felt { border-width: 9px; aspect-ratio: 3 / 4; width: min(92%, 760px); }
-  .table-center { width: 94%; top: 40%; }
+  /* 底池那颗药丸现在是深色的，和上排座位挨着会很明显。
+     往下挪一点、再收窄一圈，两边就不打架了。 */
+  .table-center { width: 94%; top: 43%; }
+  .pot-display { padding: 3px 11px; }
+  .pot-amount { font-size: 15px; }
   .board { flex-wrap: wrap; justify-content: center; }
   .log-panel { width: 100%; }
   .result-banner { flex-direction: column; gap: 10px; text-align: center; }
@@ -824,10 +883,10 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   gap: 6px;
   margin-bottom: 20px;
-  background: #101815;
+  background: var(--surface-2);
   padding: 4px;
   border-radius: 10px;
-  border: 1px solid #2b3833;
+  border: 1px solid var(--line);
 }
 
 .mode-tab {
@@ -842,14 +901,14 @@ button { font-family: inherit; cursor: pointer; }
   transition: background .15s, color .15s;
 }
 .mode-tab:hover { color: var(--ink); }
-.mode-tab.active { background: #24322b; color: var(--gold); }
+.mode-tab.active { background: var(--surface); color: var(--gold); border-color: var(--gold); }
 
 .field input[type="text"] {
   width: 100%;
   padding: 11px 12px;
   border-radius: 10px;
-  border: 1px solid #33413b;
-  background: #101815;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
   color: var(--ink);
   font-size: 14px;
   font-family: inherit;

@@ -38,12 +38,14 @@
   ];
 
   // 下注筹码显示在座位朝向桌心的一侧。
-  // 正上方那个要再抬高些，否则会压到底池的数字。
+  // 正上方那个夹在「顶上那个座位」和「底池」中间，两头都得留出空。
+  // 底池那颗药丸改成实心深色之后比原来重，29% 只是刚好贴上，
+  // 一有人下注就被盖住半颗筹码 —— 25% 上下各留二十来个像素。
   const BET_OFFSETS = [
     { left: 50, top: 62 },
     { left: 28, top: 56 },
     { left: 28, top: 40 },
-    { left: 50, top: 29 },
+    { left: 50, top: 25 },
     { left: 72, top: 40 },
     { left: 72, top: 56 },
   ];
@@ -289,13 +291,27 @@
       if (p.bet > 0 && !isNarrow()) seats.appendChild(betEl(p, i));
     });
 
-    // 庄家按钮贴在庄家座位旁边
+    // 庄家按钮贴在庄家座位旁边。
+    //
+    // 偏移量要按像素算再折回百分比。之前横向直接写了 16%，而桌面是 16:9.5 的 ——
+    // 横向 1% 比纵向 1% 长将近七成，宽屏上那就是一百四十多像素，
+    // 按钮离座位老远，看着像浮在桌心。
+    //
+    // 横向让开整个座位（否则压在名牌上），纵向只朝桌心轻轻带一点。
     const btnPos = seatPositions()[displaySeat(view.buttonIndex)];
+    const felt = document.querySelector('.felt');
+    // offsetWidth/Height 拿的是布局尺寸，不受 3D 变换影响，正是这里要的
+    const feltW = (felt && felt.offsetWidth) || 900;
+    const feltH = (felt && felt.offsetHeight) || 534;
+    const seatW = (seats.querySelector('.seat') || {}).offsetWidth || 128;
+    const sideStep = (seatW / 2 + 16) / feltW * 100;    // 半个座位再加一道缝
+    const dropStep = 14 / feltH * 100;
+
     const dealer = document.createElement('div');
     dealer.className = 'dealer-button';
     dealer.textContent = 'D';
-    dealer.style.left = (btnPos.left + (btnPos.left > 50 ? -14 : btnPos.left < 50 ? 14 : 16)) + '%';
-    dealer.style.top = (btnPos.top + (btnPos.top > 50 ? -13 : 13)) + '%';
+    dealer.style.left = (btnPos.left + (btnPos.left > 50 ? -sideStep : sideStep)) + '%';
+    dealer.style.top = (btnPos.top + (btnPos.top > 50 ? -dropStep : dropStep)) + '%';
     seats.appendChild(dealer);
   }
 
@@ -309,6 +325,24 @@
   function tickLabel(base, secs) {
     if (secs === null) return base;
     return base === 'Offline' ? `Offline · ${secs}s` : `${base} ${secs}s`;
+  }
+
+  /**
+   * 头像。不存任何图片：名字算出色相，画个渐变加首字母。
+   * 确定性的 —— 同一个人在所有人屏幕上都是同一个头像，服务器不用参与。
+   */
+  function avatarEl(name) {
+    const el = document.createElement('div');
+    el.className = 'avatar';
+    const text = String(name || '?');
+    let h = 0;
+    for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
+    const hue = h % 360;
+    el.style.background =
+      `linear-gradient(140deg, hsl(${hue} 58% 60%), hsl(${(hue + 40) % 360} 52% 44%))`;
+    // 用展开取首字符，别用 [0] —— emoji 和部分汉字是两个码元，会被劈开
+    el.textContent = ([...text][0] || '?').toUpperCase();
+    return el;
   }
 
   /** 这个座位是不是排着补码。只有联机才有这份数据，单机恒为 false */
@@ -385,14 +419,35 @@
     }
     seat.appendChild(cards);
 
-    // 名牌
+    // 名牌：头像 + 名字 / 筹码。
+    // 名字一律走 textContent —— 它是别人取的，十二个字符足够写下 <img src=x>，
+    // 拼进 innerHTML 就是让同桌的人在你的页面上执行脚本。
     const plate = document.createElement('div');
     plate.className = 'plate';
+    plate.appendChild(avatarEl(p.name));
+
+    const text = document.createElement('div');
+    text.className = 'plate-text';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'plate-name';
+    nameEl.textContent = p.name;
+    text.appendChild(nameEl);
+
     const levelName = p.level && AI.LEVELS[p.level] ? AI.LEVELS[p.level].name : '';
-    plate.innerHTML =
-      `<div class="plate-name">${p.name}</div>` +
-      `<div class="plate-level">${levelName}</div>` +
-      `<div class="plate-chips${p.busted ? ' busted' : ''}">${p.busted ? 'Out' : p.chips}</div>`;
+    if (levelName) {
+      const lv = document.createElement('div');
+      lv.className = 'plate-level';
+      lv.textContent = levelName;
+      text.appendChild(lv);
+    }
+
+    const chips = document.createElement('div');
+    chips.className = 'plate-chips' + (p.busted ? ' busted' : '');
+    chips.textContent = p.busted ? 'Out' : String(p.chips);
+    text.appendChild(chips);
+
+    plate.appendChild(text);
     seat.appendChild(plate);
 
     // 剩余筹码也画成实物，输光了自然就没了

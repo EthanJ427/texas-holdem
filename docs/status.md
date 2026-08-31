@@ -18,7 +18,8 @@ and server on different versions.
 
 **Solo** — six-max no-limit, three bot tiers (Novice / Intermediate / Expert, measured at 95% /
 28% / 25% VPIP; Expert beats Novice by ~222 BB/100 over 1500 seeded hands). First-person 3D
-table, chip stacks, Web Audio sound synthesis, localStorage save.
+table, chip stacks, Web Audio sound synthesis, localStorage save. Light palette; seat avatars
+are hashed from the name (no assets); card backs carry the Anthropic mark as an inline SVG.
 
 **Online** — room codes, bots fill empty seats so two players suffice. Reconnect restores seat
 and stack. 60 seconds per decision, then the server checks or folds. Players arriving mid-hand
@@ -53,6 +54,12 @@ wrangler; the tests do not need it.
   actor before pushing state** or the number describes the previous player. Disconnects push
   state immediately — the player who drops is often the one being waited on, and that is exactly
   the minute nobody would otherwise be told.
+- **Player names are attacker-controlled.** Twelve characters is enough for `<img src=x>`, so
+  anything that renders a name uses `textContent`, never `innerHTML`. The seat plate got this
+  wrong until 2026-08-15.
+- Colour lives in `:root` as tokens (`--surface`, `--line`, `--felt`…). Nothing below it
+  hardcodes a colour, so the theme is one block to change — but shadow *weights* are part of the
+  theme too: what reads as depth on near-black reads as dirt on near-white.
 - Server shuffles with `crypto.getRandomValues`. `Math.random` is predictable.
 - Game-simulation tests use a seeded PRNG; unseeded runs swing 38–368 BB/100 on the same code.
 
